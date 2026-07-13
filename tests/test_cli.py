@@ -89,6 +89,15 @@ def test_why_explains_current_state(pm_home: Path, capsys) -> None:
     assert "classified" in out  # lists the legal next states
 
 
+def test_why_shows_pm_labels(pm_home: Path, capsys) -> None:
+    _run("record", "intake", "--id", "w1", "--title", "x")
+    capsys.readouterr()
+    assert _run("why", "w1") == 0
+    out = capsys.readouterr().out
+    assert "pm.stage:" in out
+    assert "pm.health:" in out
+
+
 def test_doctor_passes_on_clean_store(pm_home: Path) -> None:
     assert _run("doctor") == 0
 

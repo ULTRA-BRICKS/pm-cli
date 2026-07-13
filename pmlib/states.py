@@ -52,6 +52,11 @@ class WorkStateDefinition:
     owner_required: str = "none"  # human | pm-agent | subagent | external-ci | none
     sla_seconds: int | None = None
     task_projection: str | None = None  # todo | in-progress | in-review | done | cancelled
+    # Structural blocked flag — an item in this state is stalled on a blocker (a decision, a
+    # dependency, a missing harness, a human). Declared per state rather than inferred from the
+    # id prefix or the category, so a transient WAIT (limit-wait / provider-overload) is NOT
+    # mislabelled blocked. Drives the pm.blocked projection label.
+    blocked: bool = False
 
 
 class _FsmError(Exception):
@@ -148,6 +153,7 @@ def _def(
     task_projection: str | None = None,
     owner_required: str = "none",
     sla_seconds: int | None = None,
+    blocked: bool = False,
 ) -> WorkStateDefinition:
     return WorkStateDefinition(
         id=id_,
@@ -158,6 +164,7 @@ def _def(
         task_projection=task_projection,
         owner_required=owner_required,
         sla_seconds=sla_seconds,
+        blocked=blocked,
     )
 
 
@@ -176,8 +183,10 @@ DEFAULT_STATES: dict[str, WorkStateDefinition] = {
     # triage
     "needs-clarification": _def("needs-clarification", _C.TRIAGE, ["ready", "cancelled"]),
     "ready": _def("ready", _C.TRIAGE, ["scoped", "blocked-by-dependency"], task_projection="todo"),
-    "blocked-by-decision": _def("blocked-by-decision", _C.TRIAGE, ["ready", "cancelled"]),
-    "blocked-by-dependency": _def("blocked-by-dependency", _C.TRIAGE, ["ready"]),
+    "blocked-by-decision": _def(
+        "blocked-by-decision", _C.TRIAGE, ["ready", "cancelled"], blocked=True
+    ),
+    "blocked-by-dependency": _def("blocked-by-dependency", _C.TRIAGE, ["ready"], blocked=True),
     # planned
     "scoped": _def("scoped", _C.PLANNED, ["queued"]),
     "queued": _def("queued", _C.PLANNED, ["dispatched", "scheduled"]),
@@ -205,13 +214,18 @@ DEFAULT_STATES: dict[str, WorkStateDefinition] = {
     "superseded": _def("superseded", _C.POST, [], terminal=True),
     "needs-retro": _def("needs-retro", _C.POST, ["retro-done"]),
     "retro-done": _def("retro-done", _C.POST, [], terminal=True),
-    # exception
-    "stuck": _def("stuck", _C.EXCEPTION, ["ready", "dispatched", "parked", "human-required"]),
+    # exception — `blocked` states are stalled on a blocker; limit-wait / provider-overload are
+    # transient WAITS (progress resumes on quota reset / backoff), so they are NOT blocked.
+    "stuck": _def(
+        "stuck", _C.EXCEPTION, ["ready", "dispatched", "parked", "human-required"], blocked=True
+    ),
     "limit-wait": _def("limit-wait", _C.EXCEPTION, ["dispatched", "queued"]),
     "provider-overload": _def("provider-overload", _C.EXCEPTION, ["dispatched", "queued"]),
-    "harness-missing": _def("harness-missing", _C.EXCEPTION, ["queued", "human-required"]),
-    "config-drift": _def("config-drift", _C.EXCEPTION, ["ready", "human-required"]),
-    "human-required": _def("human-required", _C.EXCEPTION, ["ready", "cancelled"]),
+    "harness-missing": _def(
+        "harness-missing", _C.EXCEPTION, ["queued", "human-required"], blocked=True
+    ),
+    "config-drift": _def("config-drift", _C.EXCEPTION, ["ready", "human-required"], blocked=True),
+    "human-required": _def("human-required", _C.EXCEPTION, ["ready", "cancelled"], blocked=True),
 }
 
 

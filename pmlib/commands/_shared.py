@@ -21,6 +21,6 @@ def machine() -> StateMachine:
     return default_machine()
 
 
-def load_items(store: EventStore) -> dict[str, WorkItem]:
-    """Replay the log into the current work-item projection."""
-    return build_projection(store.read_all(), machine())
+def load_items(store: EventStore, m: StateMachine | None = None) -> dict[str, WorkItem]:
+    """Replay the log into the current work-item projection (reusing ``m`` if the caller has one)."""
+    return build_projection(store.read_all(), m or machine())

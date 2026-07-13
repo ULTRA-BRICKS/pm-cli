@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from ..labels import pm_labels
 from ..model import WorkItem
 from ..states import StateMachine, WorkStateDefinition
 from ._shared import load_items, machine, open_store
@@ -23,17 +24,18 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    items = load_items(open_store())
+    m = machine()
+    items = load_items(open_store(), m)
     item = items.get(args.id)
     if item is None:
         print(f"error: no work item `{args.id}`", file=sys.stderr)
         return 2
-    m = machine()
     defn = m.get(item.state)
     print(f"{item.id}  [{item.state}]  {item.title}")
     if item.project_id:
         print(f"  project:  {item.project_id}")
     print(f"  privacy:  {item.privacy}")
+    print(f"  labels:   {', '.join(pm_labels(item, m))}")
     _print_history(item)
     _print_evidence(item)
     _print_next(m, defn, item)

@@ -40,6 +40,11 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
   the `DEFAULT_STATES` registry (research #255's flexible-FSM section).
 - `pmlib/model.py` — the `WorkItem` projected shape.
 - `pmlib/projection.py` — `build_projection`: the deterministic fold of events into work items.
+- `pmlib/labels.py` — `pm_labels`: the pm.stage/pm.blocked/pm.health projection onto task-cli
+  (labels-only; task-cli's five canonical states are never migrated).
+- `pmlib/adapters/*` — the seam to foreign tools (the ONLY modules that know a foreign tool's
+  shape, like rig-cli's `catalog.py`). `adapters/task.py` ingests task-cli tickets: PURE
+  `plan_ingest`/`flatten_records` split from the effectful `fetch_task_records` shell-out.
 - `pmlib/cli.py` + `pmlib/commands/*` — argparse dispatch + self-registering commands.
 
 ## Tests

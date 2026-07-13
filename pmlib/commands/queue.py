@@ -9,9 +9,14 @@ from __future__ import annotations
 
 import argparse
 import json
+from typing import TYPE_CHECKING
 
-from ..model import WorkItem
+from ..labels import pm_health, pm_labels
 from ._shared import load_items, machine, open_store
+
+if TYPE_CHECKING:  # annotation-only imports
+    from ..model import WorkItem
+    from ..states import StateMachine
 
 NAME = "queue"
 HELP = "list the current work queue (projected from the event log)"
@@ -24,18 +29,20 @@ def configure(parser: argparse.ArgumentParser) -> None:
 
 
 def run(args: argparse.Namespace) -> int:
-    items = list(load_items(open_store()).values())
-    items = _filter(items, args)
+    m = machine()
+    items = list(load_items(open_store(), m).values())
+    items = _filter(items, args, m)
     items.sort(key=lambda it: (it.updated_at, it.id))
     if args.json:
-        print(json.dumps([it.to_dict() for it in items], ensure_ascii=False))
+        rows = [{**it.to_dict(), "labels": pm_labels(it, m)} for it in items]
+        print(json.dumps(rows, ensure_ascii=False))
         return 0
-    _print_table(items)
+    _print_table(items, m)
     return 0
 
 
-def _filter(items: list[WorkItem], args: argparse.Namespace) -> list[WorkItem]:
-    states = machine().states
+def _filter(items: list[WorkItem], args: argparse.Namespace, m: StateMachine) -> list[WorkItem]:
+    states = m.states
     out = items
     if args.state:
         out = [it for it in out if it.state == args.state]
@@ -46,13 +53,16 @@ def _filter(items: list[WorkItem], args: argparse.Namespace) -> list[WorkItem]:
     return out
 
 
-def _print_table(items: list[WorkItem]) -> None:
+def _print_table(items: list[WorkItem], m: StateMachine) -> None:
     if not items:
         print("(queue empty)")
         return
-    id_w = max((len(it.id) for it in items), default=2)
-    state_w = max((len(it.state) for it in items), default=12)
-    for it in items:
+    rows = [(it.id, it.state, pm_health(it, m), it) for it in items]
+    id_w = max((len(r[0]) for r in rows), default=2)
+    state_w = max((len(r[1]) for r in rows), default=12)
+    health_w = max((len(r[2]) for r in rows), default=7)
+    for item_id, state, health, it in rows:
         flags = f"  !{len(it.errors)}" if it.errors else ""
-        title = it.title[:60]
-        print(f"{it.id:<{id_w}}  {it.state:<{state_w}}  {title}{flags}")
+        print(
+            f"{item_id:<{id_w}}  {state:<{state_w}}  {health:<{health_w}}  {it.title[:60]}{flags}"
+        )

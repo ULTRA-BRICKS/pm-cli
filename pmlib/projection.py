@@ -61,10 +61,26 @@ def _apply_intake(items: dict[str, WorkItem], event: Event, machine: StateMachin
         project_id=str(p.get("project", "")),
         privacy=str(p.get("privacy") or PRIVACY_LOCAL_ONLY),
         task_refs=[str(r) for r in p.get("task_refs", [])],
+        evidence=_intake_evidence(p, event.ts),
         intake_refs=[event.id],
         created_at=event.ts,
         updated_at=event.ts,
     )
+
+
+def _evidence_ref(data: dict, ts: str) -> EvidenceRef:
+    """Build one EvidenceRef from a ``{kind, uri, digest}`` mapping observed at ``ts``."""
+    return EvidenceRef(
+        kind=str(data.get("kind", "")),
+        uri=str(data.get("uri", "")),
+        observed_at=ts,
+        digest=str(data.get("digest", "")),
+    )
+
+
+def _intake_evidence(payload: dict, ts: str) -> list[EvidenceRef]:
+    """Evidence carried inline on an intake event (adapters attach it so onboarding is atomic)."""
+    return [_evidence_ref(e, ts) for e in payload.get("evidence", []) if isinstance(e, dict)]
 
 
 def _apply_transition(items: dict[str, WorkItem], event: Event, machine: StateMachine) -> None:
@@ -89,15 +105,7 @@ def _apply_evidence(items: dict[str, WorkItem], event: Event) -> None:
     item = items.get(event.item_id)
     if item is None:
         return
-    p = event.payload
-    item.evidence.append(
-        EvidenceRef(
-            kind=str(p.get("kind", "")),
-            uri=str(p.get("uri", "")),
-            observed_at=event.ts,
-            digest=str(p.get("digest", "")),
-        )
-    )
+    item.evidence.append(_evidence_ref(event.payload, event.ts))
     item.updated_at = event.ts
 
 

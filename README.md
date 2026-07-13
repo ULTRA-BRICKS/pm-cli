@@ -23,11 +23,19 @@ pm record intake --id <id> --title <t> [--project <p>] [--privacy local-only|rem
 pm record transition <id> <state> [--force]   # validated against the FSM + evidence gates
 pm record evidence <id> <kind> <uri>
 pm record note <id> <text>
+pm ingest --source task [--repo-dir <dir>] [--from-file <f>] [--dry-run] [--json]
 pm queue [--json] [--category <c>] [--state <s>]
 pm why <id>                                    # current state, legal next moves, missing evidence
 pm doctor                                      # store writability + FSM integrity
 pm version
 ```
+
+`pm ingest --source task` reads your task-cli tickets (via `task list --all --json`, run in the
+`--repo-dir` directory), projects each into a deduped WorkItem (`task:<id>`), and records its url as
+`task-record` evidence. Re-running is a no-op for already-tracked tickets. Each item's pm richness
+is *rendered* as `pm.stage` / `pm.blocked` / `pm.health` labels in `pm queue` / `pm why` — a
+read-only projection; ingest does NOT write labels back to task-cli, and task-cli's own five states
+are left untouched (writing labels onto tickets is a later, delegated step).
 
 The event log lives at `$PM_HOME/events.jsonl` (default `$XDG_STATE_HOME/pm` or
 `~/.local/state/pm`).
