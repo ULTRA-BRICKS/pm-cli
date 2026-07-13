@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pm-cli"
+version = "0.1.0"
+description = "pm — autonomous project-manager coordinator: an event-sourced work queue over the task/tg/rig ecosystem (agent-tools research #255)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Alex Mextner" }]
+# No hard runtime deps: the store is JSONL over stdlib json, the FSM is pure data. Optional
+# heavy deps (yaml for external config, adapters) must be imported lazily inside the command
+# that needs them so `pm --help` / `pm doctor` stay stdlib-only.
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+pm = "pmlib.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/alex-mextner/pm-cli"
+
+# Explicit package list (NOT flat-layout autodiscovery). commands/ is a SUBpackage of pmlib.
+[tool.setuptools.packages.find]
+include = ["pmlib*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
