@@ -42,9 +42,13 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
 - `pmlib/projection.py` — `build_projection`: the deterministic fold of events into work items.
 - `pmlib/labels.py` — `pm_labels`: the pm.stage/pm.blocked/pm.health projection onto task-cli
   (labels-only; task-cli's five canonical states are never migrated).
+- `pmlib/intake.py` — the intake DEAD-LETTER QUEUE: the `IntakeEvent` model + `plan_processing`
+  (bounded-retry processing of captured requests into WorkItems; deadletter on exhaustion).
 - `pmlib/adapters/*` — the seam to foreign tools (the ONLY modules that know a foreign tool's
-  shape, like rig-cli's `catalog.py`). `adapters/task.py` ingests task-cli tickets: PURE
-  `plan_ingest`/`flatten_records` split from the effectful `fetch_task_records` shell-out.
+  shape, like rig-cli's `catalog.py`). `adapters/task.py` ingests task-cli tickets; `adapters/
+  telegram.py` captures inbound Telegram messages (`tg replies user --json`) into the DLQ. Each is
+  a PURE plan/capture split from an effectful `fetch_*` shell-out. No tg-cli/task-cli change needed
+  — pm consumes their existing `--json` streams read-only.
 - `pmlib/cli.py` + `pmlib/commands/*` — argparse dispatch + self-registering commands.
 
 ## Tests

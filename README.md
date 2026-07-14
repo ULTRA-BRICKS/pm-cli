@@ -24,6 +24,8 @@ pm record transition <id> <state> [--force]   # validated against the FSM + evid
 pm record evidence <id> <kind> <uri>
 pm record note <id> <text>
 pm ingest --source task [--repo-dir <dir>] [--from-file <f>] [--dry-run] [--json]
+pm ingest --source telegram [--since <3d>] [--from-file <f>] [--dry-run] [--json]
+pm dlq [--json] [--status unprocessed|processed|deadletter]
 pm queue [--json] [--category <c>] [--state <s>]
 pm why <id>                                    # current state, legal next moves, missing evidence
 pm doctor                                      # store writability + FSM integrity
@@ -36,6 +38,14 @@ pm version
 is *rendered* as `pm.stage` / `pm.blocked` / `pm.health` labels in `pm queue` / `pm why` — a
 read-only projection; ingest does NOT write labels back to task-cli, and task-cli's own five states
 are left untouched (writing labels onto tickets is a later, delegated step).
+
+`pm ingest --source telegram` reads inbound Telegram messages (via `tg replies user --json`) and
+runs them through the intake **dead-letter queue**: each message is captured as an
+`intake_captured` (status `unprocessed`) the instant pm sees it — so it can never be lost — then
+processed into a WorkItem. Processing is retried a bounded number of times — each `pm ingest` run
+is one tick that advances a failing intake by one attempt — and on exhaustion the intake moves to
+`intake_deadletter` with the failure reason, durably in the log and visible via `pm dlq`. `pm dlq`
+lists the ledger (unprocessed / processed / deadletter).
 
 The event log lives at `$PM_HOME/events.jsonl` (default `$XDG_STATE_HOME/pm` or
 `~/.local/state/pm`).

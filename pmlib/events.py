@@ -26,9 +26,13 @@ from datetime import datetime, timezone
 class EventKind(str):
     """The event vocabulary. A ``str`` subclass so events serialize as plain strings.
 
-    Kept deliberately small for Release 1 — the "organ of sight" only needs to record what it
-    observed (intake), how work moved (transition), what proved a move (evidence), and free-form
-    context (note). Dispatch/dependency events arrive in later milestones.
+    WorkItem lifecycle: ``intake`` (a WorkItem is born), ``transition`` (state move),
+    ``evidence`` (proof of a move), ``note`` (free-form context).
+
+    Intake dead-letter queue (M3): a raw inbound request is captured as ``intake_captured``
+    BEFORE any processing (so it can never be lost), then processing either marks it
+    ``intake_processed`` (a WorkItem was born from it) or, after bounded retries recorded as
+    ``intake_failed``, moves it to ``intake_deadletter``.
     """
 
 
@@ -37,8 +41,14 @@ class _Kinds:
     TRANSITION = EventKind("transition")
     EVIDENCE = EventKind("evidence")
     NOTE = EventKind("note")
+    # intake dead-letter queue
+    INTAKE_CAPTURED = EventKind("intake_captured")
+    INTAKE_PROCESSED = EventKind("intake_processed")
+    INTAKE_FAILED = EventKind("intake_failed")
+    INTAKE_DEADLETTER = EventKind("intake_deadletter")
 
-    ALL = frozenset({INTAKE, TRANSITION, EVIDENCE, NOTE})
+    ALL = frozenset({INTAKE, TRANSITION, EVIDENCE, NOTE, INTAKE_CAPTURED,
+                     INTAKE_PROCESSED, INTAKE_FAILED, INTAKE_DEADLETTER})
 
 
 # Expose the kinds as attributes on ``EventKind`` for ergonomic ``EventKind.INTAKE`` access.
@@ -46,6 +56,10 @@ EventKind.INTAKE = _Kinds.INTAKE
 EventKind.TRANSITION = _Kinds.TRANSITION
 EventKind.EVIDENCE = _Kinds.EVIDENCE
 EventKind.NOTE = _Kinds.NOTE
+EventKind.INTAKE_CAPTURED = _Kinds.INTAKE_CAPTURED
+EventKind.INTAKE_PROCESSED = _Kinds.INTAKE_PROCESSED
+EventKind.INTAKE_FAILED = _Kinds.INTAKE_FAILED
+EventKind.INTAKE_DEADLETTER = _Kinds.INTAKE_DEADLETTER
 EventKind.ALL = _Kinds.ALL
 
 

@@ -18,6 +18,12 @@ INVARIANTS
 from __future__ import annotations
 
 from .events import Event, EventKind
+from .intake import (
+    STATUS_DEADLETTER,
+    STATUS_PROCESSED,
+    STATUS_UNPROCESSED,
+    IntakeEvent,
+)
 from .model import PRIVACY_LOCAL_ONLY, EvidenceRef, Transition, WorkItem
 from .states import EvidenceError, StateMachine, TransitionError
 
@@ -28,6 +34,54 @@ def build_projection(events: list[Event], machine: StateMachine) -> dict[str, Wo
     for event in events:
         _apply(items, event, machine)
     return items
+
+
+def build_intake_ledger(events: list[Event]) -> dict[str, IntakeEvent]:
+    """Replay the intake dead-letter-queue events into a ``{intake_id: IntakeEvent}`` ledger.
+
+    A second, independent fold over the SAME log (like ``build_projection`` for WorkItems). Pure
+    and deterministic. Failure/processed/deadletter events for an intake that was never captured
+    are ignored, so a partial log can't crash the ledger.
+    """
+    ledger: dict[str, IntakeEvent] = {}
+    for event in events:
+        _apply_intake_ledger(ledger, event)
+    return ledger
+
+
+def _apply_intake_ledger(ledger: dict[str, IntakeEvent], event: Event) -> None:
+    if event.kind == EventKind.INTAKE_CAPTURED:
+        _ledger_capture(ledger, event)
+        return
+    intake = ledger.get(event.item_id)
+    if intake is None:
+        return  # a status event for an uncaptured intake — ignore
+    if event.kind == EventKind.INTAKE_FAILED:
+        intake.attempts += 1
+        intake.last_error = str(event.payload.get("reason", ""))
+    elif event.kind == EventKind.INTAKE_PROCESSED:
+        intake.status = STATUS_PROCESSED
+        intake.work_item_id = str(event.payload.get("work_item_id", ""))
+    elif event.kind == EventKind.INTAKE_DEADLETTER:
+        intake.status = STATUS_DEADLETTER
+        intake.last_error = str(event.payload.get("reason", ""))
+    else:
+        return
+    intake.updated_at = event.ts
+
+
+def _ledger_capture(ledger: dict[str, IntakeEvent], event: Event) -> None:
+    p = event.payload
+    intake_id = str(p.get("id") or event.id)
+    if intake_id in ledger:  # a duplicate capture — keep the first, refresh the timestamp
+        ledger[intake_id].updated_at = event.ts
+        return
+    ledger[intake_id] = IntakeEvent(
+        id=intake_id, source=str(p.get("source", "")), external_id=str(p.get("external_id", "")),
+        sender=str(p.get("sender", "")), text=str(p.get("text", "")),
+        ts_ms=p.get("ts_ms"), pane=str(p.get("pane", "")),
+        status=STATUS_UNPROCESSED, captured_at=event.ts, updated_at=event.ts,
+    )
 
 
 def _apply(items: dict[str, WorkItem], event: Event, machine: StateMachine) -> None:
