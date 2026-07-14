@@ -95,6 +95,7 @@ def _intake_event(rec: dict, ref: str, project: str, machine: StateMachine) -> E
         "title": str(rec.get("title") or ""),
         "project": project,
         "state": pm_state,
+        "labels": [str(x) for x in (rec.get("labels") or [])],
         "task_refs": [ref],
         "source": SOURCE,
     }

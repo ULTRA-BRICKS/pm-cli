@@ -28,6 +28,13 @@ def test_state_is_mapped_from_task_state() -> None:
     assert items["task:#13"].state == INGEST_STATE_MAP["todo"]
 
 
+def test_task_labels_flow_into_work_item() -> None:
+    recs = [{"id": "#9", "title": "Harden auth", "state": "todo", "url": "u",
+             "labels": ["security", "backend"]}]
+    items = build_projection(plan_ingest(recs, {}, default_machine()), default_machine())
+    assert items["task:#9"].labels == ["security", "backend"]
+
+
 def test_task_id_and_url_recorded_as_ref_and_evidence() -> None:
     events = plan_ingest(_RECORDS, {}, default_machine())
     items = build_projection(events, default_machine())

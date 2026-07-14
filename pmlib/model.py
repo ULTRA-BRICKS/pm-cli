@@ -70,6 +70,7 @@ class WorkItem:
     state: str = "seen"
     project_id: str = ""
     privacy: str = PRIVACY_LOCAL_ONLY
+    labels: list[str] = field(default_factory=list)  # carried from the source (e.g. task-cli labels)
     task_refs: list[str] = field(default_factory=list)
     intake_refs: list[str] = field(default_factory=list)
     evidence: list[EvidenceRef] = field(default_factory=list)
@@ -89,7 +90,7 @@ class WorkItem:
         """A JSON-serializable view for ``pm queue --json`` and reports."""
         return {
             "id": self.id, "title": self.title, "state": self.state,
-            "project": self.project_id, "privacy": self.privacy,
+            "project": self.project_id, "privacy": self.privacy, "labels": list(self.labels),
             "task_refs": list(self.task_refs), "intake_refs": list(self.intake_refs),
             "evidence": [{"kind": e.kind, "uri": e.uri, "observed_at": e.observed_at}
                          for e in self.evidence],

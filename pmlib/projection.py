@@ -125,6 +125,7 @@ def _apply_intake(items: dict[str, WorkItem], event: Event, machine: StateMachin
         state=str(p.get("state") or machine.initial_state),
         project_id=str(p.get("project", "")),
         privacy=str(p.get("privacy") or PRIVACY_LOCAL_ONLY),
+        labels=[str(x) for x in p.get("labels", [])],
         task_refs=[str(r) for r in p.get("task_refs", [])],
         evidence=_intake_evidence(p, event.ts),
         intake_refs=[event.id],

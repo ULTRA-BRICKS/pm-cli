@@ -31,6 +31,8 @@ pm timer <id> --at <iso> [--kind <k>] [--reason <r>]
 pm reminders [--json]                            # blocked/unblocked, stale, duplicate, cycle, timer
 pm reconcile --source pr [--from-file <f>] [--dry-run] [--json]
 pm reconcile --source rig [--repo-dir <dir>] [--from-file <f>] [--json]
+pm executors [--from-file <f>] [--json]          # the executor ledger (harness/model/quota)
+pm route [<id>] [--risk low|normal|high] [--from-file <f>] [--json]   # read-only recommendation
 pm queue [--json] [--category <c>] [--state <s>]
 pm why <id>                                    # current state, legal next moves, missing evidence
 pm doctor                                      # store writability + FSM integrity
@@ -66,6 +68,14 @@ moving to `deployed`/`done` requires a per-project deploy probe and a decision o
 audit — deliberately out of scope here. `pm reconcile --source rig` runs `rig status` and reports a
 first-class `config-drift` health status on config/schema skew (vs `ok` when rig merely reports disk
 drift, vs `error`).
+
+`pm executors` shows the executor ledger (each harness+model's reliability, quota headroom, context
+pressure) from a telemetry snapshot or a best-effort `tg-ctl status` read. `pm route` then
+**recommends** an executor for a work item purely from that ledger and the item's risk (from labels,
+or `--risk`) and privacy: it routes high-risk work to a senior model and low-risk to a cheaper one,
+says `wait` when every executor lacks quota headroom, and says `blocked` when local-only work has no
+local executor. It is quota/limit guarding, **not** cost accounting (the ecosystem has invocation
+stats, not spend), and it is strictly read-only — it writes no events and dispatches nothing.
 
 The event log lives at `$PM_HOME/events.jsonl` (default `$XDG_STATE_HOME/pm` or
 `~/.local/state/pm`).

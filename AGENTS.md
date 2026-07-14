@@ -52,6 +52,11 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
   deploy-probe (fork b) and ship-audit-authority (fork a) decisions, which are NOT implemented.
   `adapters/github.py` (PR state + CI) and `adapters/rig_health.py` (config-drift health) are the
   effectful seams.
+- `pmlib/executors.py` — the executor ledger + `recommend_routing`: PURE, READ-ONLY routing (risk +
+  privacy + quota headroom). Quota/limit guarding, NOT cost accounting (no spend data exists). It
+  dispatches nothing and writes no events; the privacy guard is a `blocked` WARNING, not
+  enforcement (enforced dispatch + the 10 adversarial tests are a later release).
+  `adapters/telemetry.py` builds the ledger from a snapshot or a best-effort `tg-ctl status` read.
 - `pmlib/adapters/*` — the seam to foreign tools (the ONLY modules that know a foreign tool's
   shape, like rig-cli's `catalog.py`). `adapters/task.py` ingests task-cli tickets; `adapters/
   telegram.py` captures inbound Telegram messages (`tg replies user --json`) into the DLQ. Each is
