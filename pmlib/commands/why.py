@@ -38,9 +38,18 @@ def run(args: argparse.Namespace) -> int:
     print(f"  labels:   {', '.join(pm_labels(item, m))}")
     _print_history(item)
     _print_evidence(item)
+    _print_deps(item)
     _print_next(m, defn, item)
     _print_errors(item)
     return 0
+
+
+def _print_deps(item: WorkItem) -> None:
+    for edge in item.dependencies:
+        suffix = f" ({edge.reason})" if edge.reason else ""
+        print(f"  dep:      {edge.edge_type} {edge.target_id}{suffix}")
+    for timer in item.timers:
+        print(f"  timer:    {timer.kind} @ {timer.due_at}")
 
 
 def _print_history(item: WorkItem) -> None:

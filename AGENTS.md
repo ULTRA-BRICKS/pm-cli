@@ -44,6 +44,9 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
   (labels-only; task-cli's five canonical states are never migrated).
 - `pmlib/intake.py` — the intake DEAD-LETTER QUEUE: the `IntakeEvent` model + `plan_processing`
   (bounded-retry processing of captured requests into WorkItems; deadletter on exhaustion).
+- `pmlib/reminders.py` — `compute_reminders`: pure derivation of nudges (blocker cleared, wait
+  satisfied, duplicate/superseded open, no progress, expired timer, dependency cycle) from the
+  WorkItem graph + a `now` clock. No I/O, no clock of its own, so it stays deterministic.
 - `pmlib/adapters/*` — the seam to foreign tools (the ONLY modules that know a foreign tool's
   shape, like rig-cli's `catalog.py`). `adapters/task.py` ingests task-cli tickets; `adapters/
   telegram.py` captures inbound Telegram messages (`tg replies user --json`) into the DLQ. Each is

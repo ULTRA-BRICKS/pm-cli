@@ -46,9 +46,12 @@ class _Kinds:
     INTAKE_PROCESSED = EventKind("intake_processed")
     INTAKE_FAILED = EventKind("intake_failed")
     INTAKE_DEADLETTER = EventKind("intake_deadletter")
+    # dependency graph
+    LINK = EventKind("link")  # a typed dependency edge between two work items
+    TIMER = EventKind("timer")  # a scheduled reminder/SLA timer on a work item
 
     ALL = frozenset({INTAKE, TRANSITION, EVIDENCE, NOTE, INTAKE_CAPTURED,
-                     INTAKE_PROCESSED, INTAKE_FAILED, INTAKE_DEADLETTER})
+                     INTAKE_PROCESSED, INTAKE_FAILED, INTAKE_DEADLETTER, LINK, TIMER})
 
 
 # Expose the kinds as attributes on ``EventKind`` for ergonomic ``EventKind.INTAKE`` access.
@@ -60,6 +63,8 @@ EventKind.INTAKE_CAPTURED = _Kinds.INTAKE_CAPTURED
 EventKind.INTAKE_PROCESSED = _Kinds.INTAKE_PROCESSED
 EventKind.INTAKE_FAILED = _Kinds.INTAKE_FAILED
 EventKind.INTAKE_DEADLETTER = _Kinds.INTAKE_DEADLETTER
+EventKind.LINK = _Kinds.LINK
+EventKind.TIMER = _Kinds.TIMER
 EventKind.ALL = _Kinds.ALL
 
 

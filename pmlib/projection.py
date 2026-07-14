@@ -24,7 +24,14 @@ from .intake import (
     STATUS_UNPROCESSED,
     IntakeEvent,
 )
-from .model import PRIVACY_LOCAL_ONLY, EvidenceRef, Transition, WorkItem
+from .model import (
+    PRIVACY_LOCAL_ONLY,
+    DependencyEdge,
+    EvidenceRef,
+    TimerRef,
+    Transition,
+    WorkItem,
+)
 from .states import EvidenceError, StateMachine, TransitionError
 
 
@@ -93,6 +100,10 @@ def _apply(items: dict[str, WorkItem], event: Event, machine: StateMachine) -> N
         _apply_evidence(items, event)
     elif event.kind == EventKind.NOTE:
         _apply_note(items, event)
+    elif event.kind == EventKind.LINK:
+        _apply_link(items, event)
+    elif event.kind == EventKind.TIMER:
+        _apply_timer(items, event)
     # Unknown kinds are ignored (forward-compatible with events from a newer pm).
 
 
@@ -168,4 +179,28 @@ def _apply_note(items: dict[str, WorkItem], event: Event) -> None:
     if item is None:
         return
     item.notes.append(str(event.payload.get("text", "")))
+    item.updated_at = event.ts
+
+
+def _apply_link(items: dict[str, WorkItem], event: Event) -> None:
+    item = items.get(event.item_id)
+    if item is None:
+        return  # a link from an unknown item — ignore
+    p = event.payload
+    condition = p.get("condition")
+    item.dependencies.append(DependencyEdge(
+        edge_type=str(p.get("type", "")), target_id=str(p.get("target_id", "")),
+        reason=str(p.get("reason", "")),
+        condition=dict(condition) if isinstance(condition, dict) else {},  # lenient on a bad log
+    ))
+    item.updated_at = event.ts
+
+
+def _apply_timer(items: dict[str, WorkItem], event: Event) -> None:
+    item = items.get(event.item_id)
+    if item is None:
+        return
+    p = event.payload
+    item.timers.append(TimerRef(kind=str(p.get("kind", "reminder")),
+                                due_at=str(p.get("due_at", "")), reason=str(p.get("reason", ""))))
     item.updated_at = event.ts
