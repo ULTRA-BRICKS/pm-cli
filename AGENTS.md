@@ -47,6 +47,11 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
 - `pmlib/reminders.py` — `compute_reminders`: pure derivation of nudges (blocker cleared, wait
   satisfied, duplicate/superseded open, no progress, expired timer, dependency cycle) from the
   WorkItem graph + a `now` clock. No I/O, no clock of its own, so it stays deterministic.
+- `pmlib/reconcile.py` — `plan_pr_reconcile`: pure PR/CI evidence reconciler. Advances state ONLY
+  on unforgeable GitHub facts and NEVER past `ship-ready` — `deployed`/`done` sit behind the
+  deploy-probe (fork b) and ship-audit-authority (fork a) decisions, which are NOT implemented.
+  `adapters/github.py` (PR state + CI) and `adapters/rig_health.py` (config-drift health) are the
+  effectful seams.
 - `pmlib/adapters/*` — the seam to foreign tools (the ONLY modules that know a foreign tool's
   shape, like rig-cli's `catalog.py`). `adapters/task.py` ingests task-cli tickets; `adapters/
   telegram.py` captures inbound Telegram messages (`tg replies user --json`) into the DLQ. Each is

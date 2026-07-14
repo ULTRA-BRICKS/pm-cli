@@ -29,6 +29,8 @@ pm dlq [--json] [--status unprocessed|processed|deadletter]
 pm link <from> <type> <target> [--reason <r>]   # blocks|waits_for|duplicates|supersedes|relates_to
 pm timer <id> --at <iso> [--kind <k>] [--reason <r>]
 pm reminders [--json]                            # blocked/unblocked, stale, duplicate, cycle, timer
+pm reconcile --source pr [--from-file <f>] [--dry-run] [--json]
+pm reconcile --source rig [--repo-dir <dir>] [--from-file <f>] [--json]
 pm queue [--json] [--category <c>] [--state <s>]
 pm why <id>                                    # current state, legal next moves, missing evidence
 pm doctor                                      # store writability + FSM integrity
@@ -55,6 +57,15 @@ lists the ledger (unprocessed / processed / deadletter).
 the nudges the graph implies — a blocker or waited-for item that has finished (so the blocked item
 can proceed), a stale active item past its SLA, a still-open duplicate/superseded item, an expired
 timer, and dependency cycles — computed purely from the projection plus the current time.
+
+`pm reconcile --source pr` reads each item's PR state and CI conclusion (via `gh`) and advances it
+along the CI window — `pr-open → ci-pending → ship-ready` on green CI, `ci-pending → fixing` on red
+— attaching `pr`/`ci` evidence idempotently, using only facts GitHub reports (which the PM agent
+cannot forge). It **never advances past `ship-ready`**: a merged PR is recorded as evidence, but
+moving to `deployed`/`done` requires a per-project deploy probe and a decision on trusting the ship
+audit — deliberately out of scope here. `pm reconcile --source rig` runs `rig status` and reports a
+first-class `config-drift` health status on config/schema skew (vs `ok` when rig merely reports disk
+drift, vs `error`).
 
 The event log lives at `$PM_HOME/events.jsonl` (default `$XDG_STATE_HOME/pm` or
 `~/.local/state/pm`).
