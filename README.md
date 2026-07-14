@@ -33,6 +33,7 @@ pm reconcile --source pr [--from-file <f>] [--dry-run] [--json]
 pm reconcile --source rig [--repo-dir <dir>] [--from-file <f>] [--json]
 pm executors [--from-file <f>] [--json]          # the executor ledger (harness/model/quota)
 pm route [<id>] [--risk low|normal|high] [--from-file <f>] [--json]   # read-only recommendation
+pm report queue|stuck|retro|monthly [--month YYYY-MM] [--json]
 pm queue [--json] [--category <c>] [--state <s>]
 pm why <id>                                    # current state, legal next moves, missing evidence
 pm doctor                                      # store writability + FSM integrity
@@ -76,6 +77,12 @@ or `--risk`) and privacy: it routes high-risk work to a senior model and low-ris
 says `wait` when every executor lacks quota headroom, and says `blocked` when local-only work has no
 local executor. It is quota/limit guarding, **not** cost accounting (the ecosystem has invocation
 stats, not spend), and it is strictly read-only — it writes no events and dispatches nothing.
+
+`pm report` is the read-only reporting surface over the whole ledger: `queue` (counts by category
+and health), `stuck` (blocked/exception states, no-progress, cycles, expired timers, dead-lettered
+intakes), `retro` (per-item retrospective facts — trigger, recovery, time-in-problem — plus
+recurring-pattern counts), and `monthly` (a month grouped product-vs-process). Every number carries
+the item ids behind it, so it is traceable back to the event log — never a vanity metric.
 
 The event log lives at `$PM_HOME/events.jsonl` (default `$XDG_STATE_HOME/pm` or
 `~/.local/state/pm`).

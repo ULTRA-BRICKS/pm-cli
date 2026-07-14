@@ -96,7 +96,7 @@ def _no_progress_reminders(item: WorkItem, machine: StateMachine, now: datetime,
     defn = machine.get(item.state)
     if defn is None or defn.category is not WorkStateCategory.ACTIVE:
         return []
-    updated = _parse_iso(item.updated_at)
+    updated = parse_iso(item.updated_at)
     if updated is None:
         return []
     threshold = defn.sla_seconds if defn.sla_seconds is not None else default_seconds
@@ -110,7 +110,7 @@ def _timer_reminders(item: WorkItem, machine: StateMachine, now: datetime) -> li
         return []  # a finished item's timers no longer matter
     out: list[Reminder] = []
     for timer in item.timers:
-        due = _parse_iso(timer.due_at)
+        due = parse_iso(timer.due_at)
         if due is not None and due <= now:
             out.append(Reminder("timer-expired", item.id,
                                 f"timer '{timer.reason or timer.kind}' due {timer.due_at}"))
@@ -152,7 +152,7 @@ def _find_cycles(graph: dict[str, list[str]]) -> set[frozenset[str]]:
     return cycles
 
 
-def _parse_iso(value: str) -> datetime | None:
+def parse_iso(value: str) -> datetime | None:
     """Parse an ISO-8601 timestamp (tolerant of a ``Z`` suffix / a naive value -> UTC)."""
     if not value:
         return None

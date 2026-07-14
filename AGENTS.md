@@ -57,6 +57,10 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
   dispatches nothing and writes no events; the privacy guard is a `blocked` WARNING, not
   enforcement (enforced dispatch + the 10 adversarial tests are a later release).
   `adapters/telemetry.py` builds the ledger from a snapshot or a best-effort `tg-ctl status` read.
+- `pmlib/reports.py` — the read-only reporting surface (`queue_report` / `stuck_report` /
+  `retro_report` / `monthly_report`): PURE builders over the projection + log. Every metric is a
+  `ReportSection` carrying the `item_ids` behind its count, so every number traces back to the log
+  (the design's anti-vanity-metric rule). This is the Release-1 "organ of sight" capstone.
 - `pmlib/adapters/*` — the seam to foreign tools (the ONLY modules that know a foreign tool's
   shape, like rig-cli's `catalog.py`). `adapters/task.py` ingests task-cli tickets; `adapters/
   telegram.py` captures inbound Telegram messages (`tg replies user --json`) into the DLQ. Each is
