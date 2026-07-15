@@ -18,7 +18,20 @@ INVARIANTS
 from __future__ import annotations
 
 from .events import Event, EventKind
-from .model import PRIVACY_LOCAL_ONLY, EvidenceRef, Transition, WorkItem
+from .intake import (
+    STATUS_DEADLETTER,
+    STATUS_PROCESSED,
+    STATUS_UNPROCESSED,
+    IntakeEvent,
+)
+from .model import (
+    PRIVACY_LOCAL_ONLY,
+    DependencyEdge,
+    EvidenceRef,
+    TimerRef,
+    Transition,
+    WorkItem,
+)
 from .states import EvidenceError, StateMachine, TransitionError
 
 
@@ -30,6 +43,54 @@ def build_projection(events: list[Event], machine: StateMachine) -> dict[str, Wo
     return items
 
 
+def build_intake_ledger(events: list[Event]) -> dict[str, IntakeEvent]:
+    """Replay the intake dead-letter-queue events into a ``{intake_id: IntakeEvent}`` ledger.
+
+    A second, independent fold over the SAME log (like ``build_projection`` for WorkItems). Pure
+    and deterministic. Failure/processed/deadletter events for an intake that was never captured
+    are ignored, so a partial log can't crash the ledger.
+    """
+    ledger: dict[str, IntakeEvent] = {}
+    for event in events:
+        _apply_intake_ledger(ledger, event)
+    return ledger
+
+
+def _apply_intake_ledger(ledger: dict[str, IntakeEvent], event: Event) -> None:
+    if event.kind == EventKind.INTAKE_CAPTURED:
+        _ledger_capture(ledger, event)
+        return
+    intake = ledger.get(event.item_id)
+    if intake is None:
+        return  # a status event for an uncaptured intake — ignore
+    if event.kind == EventKind.INTAKE_FAILED:
+        intake.attempts += 1
+        intake.last_error = str(event.payload.get("reason", ""))
+    elif event.kind == EventKind.INTAKE_PROCESSED:
+        intake.status = STATUS_PROCESSED
+        intake.work_item_id = str(event.payload.get("work_item_id", ""))
+    elif event.kind == EventKind.INTAKE_DEADLETTER:
+        intake.status = STATUS_DEADLETTER
+        intake.last_error = str(event.payload.get("reason", ""))
+    else:
+        return
+    intake.updated_at = event.ts
+
+
+def _ledger_capture(ledger: dict[str, IntakeEvent], event: Event) -> None:
+    p = event.payload
+    intake_id = str(p.get("id") or event.id)
+    if intake_id in ledger:  # a duplicate capture — keep the first, refresh the timestamp
+        ledger[intake_id].updated_at = event.ts
+        return
+    ledger[intake_id] = IntakeEvent(
+        id=intake_id, source=str(p.get("source", "")), external_id=str(p.get("external_id", "")),
+        sender=str(p.get("sender", "")), text=str(p.get("text", "")),
+        ts_ms=p.get("ts_ms"), pane=str(p.get("pane", "")),
+        status=STATUS_UNPROCESSED, captured_at=event.ts, updated_at=event.ts,
+    )
+
+
 def _apply(items: dict[str, WorkItem], event: Event, machine: StateMachine) -> None:
     if event.kind == EventKind.INTAKE:
         _apply_intake(items, event, machine)
@@ -39,6 +100,10 @@ def _apply(items: dict[str, WorkItem], event: Event, machine: StateMachine) -> N
         _apply_evidence(items, event)
     elif event.kind == EventKind.NOTE:
         _apply_note(items, event)
+    elif event.kind == EventKind.LINK:
+        _apply_link(items, event)
+    elif event.kind == EventKind.TIMER:
+        _apply_timer(items, event)
     # Unknown kinds are ignored (forward-compatible with events from a newer pm).
 
 
@@ -60,6 +125,7 @@ def _apply_intake(items: dict[str, WorkItem], event: Event, machine: StateMachin
         state=str(p.get("state") or machine.initial_state),
         project_id=str(p.get("project", "")),
         privacy=str(p.get("privacy") or PRIVACY_LOCAL_ONLY),
+        labels=[str(x) for x in p.get("labels", [])],
         task_refs=[str(r) for r in p.get("task_refs", [])],
         evidence=_intake_evidence(p, event.ts),
         intake_refs=[event.id],
@@ -114,4 +180,28 @@ def _apply_note(items: dict[str, WorkItem], event: Event) -> None:
     if item is None:
         return
     item.notes.append(str(event.payload.get("text", "")))
+    item.updated_at = event.ts
+
+
+def _apply_link(items: dict[str, WorkItem], event: Event) -> None:
+    item = items.get(event.item_id)
+    if item is None:
+        return  # a link from an unknown item — ignore
+    p = event.payload
+    condition = p.get("condition")
+    item.dependencies.append(DependencyEdge(
+        edge_type=str(p.get("type", "")), target_id=str(p.get("target_id", "")),
+        reason=str(p.get("reason", "")),
+        condition=dict(condition) if isinstance(condition, dict) else {},  # lenient on a bad log
+    ))
+    item.updated_at = event.ts
+
+
+def _apply_timer(items: dict[str, WorkItem], event: Event) -> None:
+    item = items.get(event.item_id)
+    if item is None:
+        return
+    p = event.payload
+    item.timers.append(TimerRef(kind=str(p.get("kind", "reminder")),
+                                due_at=str(p.get("due_at", "")), reason=str(p.get("reason", ""))))
     item.updated_at = event.ts
