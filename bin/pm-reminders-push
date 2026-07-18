@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# bin/pm-reminders-push — cron-driven digest: ingest task-cli tickets, compute pm reminders,
+# and push ONE Telegram digest if (and only if) there is something to report. Silent (exit 0,
+# no Telegram message) on ZERO REMINDERS — this runs unattended 3x/day and must never spam an
+# all-clear ping. Errors are loud WITHIN tg's reach: an ERR trap logs locally and pushes a
+# distinct failure ping. If the broken component is tg/bun/network itself, the local log line
+# plus the nonzero exit (visible to cron) are the surviving evidence — an out-of-band
+# dead-man backstop is deliberately out of scope for this shim.
+# Known floors (accepted, not bugs): no concurrency lock — the job runs ~1s three times a
+# day, and a stale lock after a hard kill would block every future run, a worse hazard than
+# the negligible overlap window. An ingest failure suppresses reminders about already-
+# ingested data for that run (the failure ping covers it). The digest shows the FIRST
+# MAX_ITEMS reminders in pm's emission order — priority ordering belongs to pm (see the
+# reminders-digest ticket). Worst-case HTML-entity expansion of 10 pathological details can
+# exceed one Telegram message; tg then SPLITS rather than failing.
+set -euo pipefail
+
+# Cron's PATH is /usr/bin:/bin — too bare for the transitive deps: `pm` re-execs `task`
+# (~/.local/bin) and its shim needs a Homebrew python3 (pm requires >=3.11; /usr/bin/python3
+# is 3.9), `tg`'s shebang needs bun (~/.bun/bin), and jq lives in Homebrew. Prepend rather
+# than overwrite so a caller-supplied PATH still works on differently-shaped machines.
+export PATH="/opt/homebrew/bin:$HOME/.bun/bin:$HOME/.files/bin:$HOME/.local/bin:$PATH"
+
+# The pm shim is this script's sibling — derive it, so any checkout location works. TG,
+# REPO_DIR, LOG and MAX_ITEMS are deployment config, not code: env-overridable defaults.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PM="$SCRIPT_DIR/pm"
+TG="${PM_PUSH_TG:-$HOME/.files/bin/tg}"
+REPO_DIR="${PM_PUSH_REPO_DIR:-$HOME/work/hyperide}"
+LOG="${PM_PUSH_LOG:-$HOME/.local/state/pm/reminders-push.log}"
+MAX_ITEMS="${PM_PUSH_MAX_ITEMS:-10}"
+# A malformed override would desync the jq slice from the footer arithmetic ("...and N more"
+# lying about N) — fall back to the default instead. Strictly positive, no leading zeros:
+# 0 renders an all-footer digest, 007 is invalid JSON for --argjson, 08/09 break bash octal.
+[[ "$MAX_ITEMS" =~ ^[1-9][0-9]*$ ]] || MAX_ITEMS=10
+
+# tg enrichment features are disabled on every send: auto-attach would upload local files the
+# text happens to name (reminder details quote paths; the failure ping names $LOG), and the
+# autolink features would fire per-item linear/msgref lookups on ticket-shaped item_ids — the
+# digest must be deterministic, text-only transport.
+TG_FLAGS=(--no-feature auto-attach --no-feature autolink-tasks --no-feature autolink-msgrefs)
+
+fail_ping() {
+  # Distinct failure signal: silence must only ever mean "no reminders". Log locally FIRST —
+  # if the broken dependency is tg/bun itself, the log line is the surviving evidence.
+  echo "$(date '+%Y-%m-%dT%H:%M:%S%z') pm-reminders-push FAILED at line $1"
+  "$TG" --tag problem "${TG_FLAGS[@]}" --title "pm-reminders-push FAILED" \
+    "pm-reminders-push failed at line $1 — see $LOG" || true
+}
+# Armed BEFORE the log setup below: an unwritable $LOG must still produce a failure ping
+# (the echo then lands wherever the caller's stdout goes — cron's redirect or the terminal).
+trap 'fail_ping $LINENO' ERR
+
+# Own the log instead of trusting the crontab redirect — the failure ping names this path,
+# so it must be true for manual runs too. (A crontab >> to the same file stays harmless.)
+# fd 3 keeps the caller's stdout reachable so dry-run output goes to the terminal, not the log.
+mkdir -p "$(dirname "$LOG")"
+exec 3>&1 >>"$LOG" 2>&1
+
+# Dry-run is a render-only preview: skip the mutating ingest so it needs no writable pm
+# store and leaves no trace — it reads whatever reminder state already exists.
+if [[ "${PM_PUSH_DRY_RUN:-}" != "1" ]]; then
+  "$PM" ingest --source task --repo-dir "$REPO_DIR" >/dev/null
+fi
+
+reminders_json="$("$PM" reminders --json)"
+# Contract guard: a top-level array whose items carry non-null renderable fields — has() alone
+# would pass a present-but-null field, which then ships as the literal text "null". Fail
+# loudly through the ERR trap instead of degrading.
+jq -e 'type=="array" and all(.[];
+        (.item_id|type=="string") and (.kind|type=="string") and (.detail != null))' \
+  <<<"$reminders_json" >/dev/null
+
+count="$(jq 'length' <<<"$reminders_json")"
+if [[ "$count" -eq 0 ]]; then
+  exit 0
+fi
+
+# MAX_ITEMS caps line COUNT — the post-render gsub folds embedded newlines/tabs from ANY of
+# the three fields, so one reminder is always one line (entities carry no whitespace, so
+# folding after @html cannot split one). The raw 120-char detail cut caps line LENGTH,
+# budgeting for post-@html entity expansion (worst case ~5x) — see the header floor note.
+# The sed maps &apos; to numeric &#39; — Telegram's basic-HTML parser supports only
+# lt/gt/amp/quot as NAMED entities (plus all numeric ones), so &apos; would render literally.
+# Empirically required: this machine's jq (1.7.x, Homebrew) escapes ' as &apos;, not &#39;.
+lines="$(jq -r --argjson max "$MAX_ITEMS" \
+  '.[:$max][]
+   | (@html "• <code>\(.item_id)</code> — \(.kind): \(.detail | tostring | .[:120])")
+   | gsub("[\r\n\t\u000b\u000c\u0085\u2028\u2029]+"; " ")' \
+  <<<"$reminders_json" | sed 's/&apos;/\&#39;/g')"
+
+remaining=$(( count > MAX_ITEMS ? count - MAX_ITEMS : 0 ))
+more_line=""
+if [[ "$remaining" -gt 0 ]]; then
+  more_line=$'\n'"...and ${remaining} more"
+fi
+
+body="<b>${count} reminder(s)</b>"$'\n\n'"${lines}${more_line}"
+
+# Dry-run: print the rendered digest (to the CALLER's stdout via fd 3, not the log) instead
+# of sending — makes the rendering pipeline (guard, escaping, truncation, overflow line)
+# testable without a live Telegram target.
+if [[ "${PM_PUSH_DRY_RUN:-}" == "1" ]]; then
+  printf '%s\n' "$body" >&3
+  exit 0
+fi
+
+"$TG" --format html --tag report "${TG_FLAGS[@]}" \
+  --title "Stuck-task reminders (pm)" "$body"
