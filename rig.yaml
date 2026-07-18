@@ -1,0 +1,30 @@
+# rig.yaml — CI provisioning for pm-cli, applied by `rig apply`.
+# See: rig status (drift), rig apply (converge). Schema in rig-cli docs/config-schema.md.
+#
+# Scope note: this file exists ONLY to give the repo a real CI gate. pm-cli had ZERO CI
+# configured, which made `gh ship` correctly refuse every PR ("no CI is a failed gate, not
+# a free pass"). This file is applied narrowly with `rig apply --only ci` — every other
+# rig-managed area (skills / agent-hooks / git-hooks dispatcher / mcp / harness / models /
+# github ruleset) is intentionally left untouched here. Widening this repo's rig scope
+# beyond CI is a separate decision, not a side effect of unblocking a merge.
+#
+# Items chosen for a small personal Python CLI (stdlib-only runtime, pytest + ruff, no
+# project dependencies):
+#   - tests       — the actual green/red signal: `uv run --with pytest pytest tests/`.
+#                   This is the check `gh ship` and any future branch ruleset gate merges
+#                   on; without it there is nothing for them to wait on.
+#   - secret-scan — gitleaks over the working tree, dependency-free, no secrets needed,
+#                   runs on every `pull_request` immediately (unlike leftover-grep/
+#                   pr-checklist/dependency-review, which either need history to compare
+#                   against or don't fit a zero-dependency repo) so it actually produces a
+#                   status check on this first PR.
+
+version: 1
+
+ci:
+  enabled: true
+  target: .github/workflows
+  all: false
+  items:
+    tests:       { enabled: true, tier: block }
+    secret-scan: { enabled: true, tier: block }
