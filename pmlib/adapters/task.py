@@ -3,7 +3,9 @@
 WHAT THIS FILE IS
     ``plan_ingest`` (PURE: task records + the current projection -> the events to append) and
     ``fetch_task_records`` (EFFECTFUL: shell out to ``task list --all --json``). The split keeps
-    the mapping/dedupe logic unit-testable without task-cli on PATH.
+    the mapping/dedupe logic unit-testable without task-cli on PATH. A second pure/effectful pair,
+    ``extract_pr_url`` / ``fetch_ticket_attachments``, does the same for PR-url DISCOVERY (see
+    ``commands/reconcile.py``'s module docstring for why bulk ingest alone can't provide it).
 
 MAPPING & DEDUPE
     - Identity is PROJECT-QUALIFIED: a ticket becomes a WorkItem with id ``task:<ref>`` where the
@@ -24,6 +26,7 @@ MAPPING & DEDUPE
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
@@ -33,6 +36,15 @@ if TYPE_CHECKING:  # annotation-only imports (kept off the runtime import surfac
     from ..events import Event
     from ..model import WorkItem
     from ..states import StateMachine
+
+# A GitHub pull-request URL exactly as it appears in a task-cli ticket's `attachments` (e.g. a
+# Linear "GitHub PR" attachment). Anchored full-match so an unrelated github.com link (a doc, an
+# issue, a commit) on the same ticket never false-positives as the tracked PR. The trailing
+# `(?:[?#].*)?` tolerates a query string or fragment (e.g. `?notification_referrer_id=...`,
+# `#issuecomment-...`) WITHOUT capturing it into the matched/returned url — real payloads observed
+# so far are query/fragment-free, but rejecting one silently would regress a single item straight
+# back to `scanned:0`, exactly the failure mode this whole feature exists to close.
+_GH_PR_URL_RE = re.compile(r"^(https://github\.com/[^/\s]+/[^/\s]+/pull/\d+)/?(?:[?#].*)?$")
 
 # The source name for this adapter (used as the intake ``source`` tag and the CLI ``--source``).
 SOURCE = "task"
@@ -51,6 +63,12 @@ _DEFAULT_PM_STATE = "ticketed"
 # task-cli defaults to a piped limit of 30 rows PER PROJECT; without an explicit -n, ingest would
 # silently truncate a busy repo to its 30 most-recent tickets. Ask for an effectively unbounded set.
 _FETCH_LIMIT = "100000"
+
+# A hung `task read` (backend network stall) must not block PR-url discovery indefinitely —
+# discovery runs once per ticket lacking `pr` evidence, so one hang would otherwise stall the
+# whole reconcile run. Only guards `fetch_ticket_attachments`, the new discovery call this PR
+# adds; `fetch_task_records`'s existing `task list` call is untouched (working code, out of scope).
+_SUBPROCESS_TIMEOUT_SECONDS = 30
 
 
 def plan_ingest(
@@ -80,6 +98,15 @@ def plan_ingest(
 def _task_ref(project: str, ticket_id: str) -> str:
     """The project-qualified dedupe/identity ref — ``<project>:<id>`` or bare ``<id>``."""
     return f"{project}:{ticket_id}" if project else ticket_id
+
+
+def raw_ticket_id(ref: str) -> str:
+    """The raw task-cli ticket id from a pm-qualified ref — the inverse of :func:`_task_ref`.
+
+    Kept next to ``_task_ref`` so the ``<project>:<id>`` format can't drift between the two
+    directions (a bare ref with no project has no colon and passes through unchanged).
+    """
+    return ref.split(":", 1)[-1]
 
 
 def _tracked_task_ids(existing: dict[str, WorkItem]) -> set[str]:
@@ -132,6 +159,76 @@ def fetch_task_records(cwd: str = "") -> list[dict]:
     if not isinstance(data, list):
         raise RuntimeError("`task list --json` did not return a JSON array")
     return flatten_records(data)
+
+
+def extract_pr_url(attachments: Iterable[object]) -> str:
+    """The first GitHub pull-request URL among a ticket's ``attachments``, or "" if none.
+
+    ``task list --json`` (what ``fetch_task_records`` calls for bulk ingest) omits
+    ``attachments`` entirely — verified against task-cli's actual output shapes (2026-08-18):
+    ``list`` tickets carry only ``{id, title, state, url, labels, what, due}``, while ``task read
+    <id> --json`` additionally carries ``attachments: [{id, title, url, subtitle}, ...]``. This is
+    why PR-url discovery needs a per-ticket ``task read`` (``fetch_ticket_attachments`` below), not
+    the bulk list call — there is no bulk-list flag that includes attachments.
+
+    ``attachments`` is typed ``Iterable[object]``, not ``Iterable[dict]`` — untrusted input (a
+    malformed backend response) may hand back non-dict elements, and this function tolerates them.
+    """
+    for att in attachments:
+        if not isinstance(att, dict):
+            continue
+        url = str(att.get("url") or "")
+        m = _GH_PR_URL_RE.match(url)
+        if m:
+            return m.group(1)  # the canonical PR url, with any query/fragment tail stripped
+    return ""
+
+
+def fetch_ticket_attachments(ticket_id: str, cwd: str = "") -> list[dict]:
+    """Shell out to ``task read <ticket_id> --json`` and return its ``attachments`` array.
+
+    ``ticket_id`` is the RAW task-cli id (``HYP-1256``, ``#12``) — use :func:`raw_ticket_id` to
+    strip a pm-qualified ref before calling. Effectful and lazy (``subprocess`` imported here,
+    matching ``fetch_task_records``'s convention). Element-level validation of ``attachments`` is
+    left to :func:`extract_pr_url` (its consumer) rather than duplicated here.
+
+    Best-effort per ticket: a ticket that fails to read (deleted, permission, transient backend
+    hiccup) returns ``[]`` rather than raising, so a discovery loop over many tickets isn't killed
+    by one bad id. Raises only when ``task`` itself is missing on PATH, or ``cwd`` doesn't exist —
+    the same actionable failures ``fetch_task_records`` raises, since either means NO discovery
+    can work at all, not just this one ticket (``subprocess`` raises the identical
+    ``FileNotFoundError`` for a missing executable AND a missing cwd, so the cwd is checked first
+    to report the right one).
+    """
+    import os
+    import subprocess
+
+    if cwd and not os.path.isdir(cwd):
+        raise RuntimeError(f"--repo-dir does not exist or is not a directory: {cwd}")
+    cmd = ["task", "read", ticket_id, "--json"]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=cwd or None,
+            timeout=_SUBPROCESS_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "`task` CLI not found on PATH — install task-cli to discover PR urls"
+        ) from exc
+    except subprocess.TimeoutExpired:
+        return []  # a hung backend call must not stall discovery for every remaining ticket
+    if proc.returncode != 0:
+        return []  # unreadable ticket — best-effort, does not fail the whole discovery pass
+    try:
+        data = json.loads(proc.stdout or "{}")
+    except ValueError:
+        return []
+    attachments = data.get("attachments") if isinstance(data, dict) else None
+    return attachments if isinstance(attachments, list) else []
 
 
 def flatten_records(data: list) -> list[dict]:
