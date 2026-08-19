@@ -47,6 +47,13 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
 - `pmlib/reminders.py` — `compute_reminders`: pure derivation of nudges (blocker cleared, wait
   satisfied, duplicate/superseded open, no progress, expired timer, dependency cycle) from the
   WorkItem graph + a `now` clock. No I/O, no clock of its own, so it stays deterministic.
+  `compute_sprint_reminders` is the sprint-lifecycle sibling (stale planning, ready-to-close,
+  needs-retro) — same purity contract, over the sprint + WorkItem projections.
+- `pmlib/sprint.py` — `Sprint`/`SprintItem` + `build_sprint_projection`: the sprint-side mirror of
+  `model.py`/`projection.py` (M4). A second, independent fold over the SAME event log — sprint
+  events (`sprint_created`/`sprint_item_added`/`sprint_started`/`sprint_closed`/`sprint_retro`) are
+  invisible to `build_projection` and vice versa. A sprint groups WorkItem ids by reference; it
+  never owns or duplicates their state (`pm sprint status` joins live).
 - `pmlib/reconcile.py` — `plan_pr_reconcile`: pure PR/CI evidence reconciler. Advances state ONLY
   on unforgeable GitHub facts and NEVER past `ship-ready` — `deployed`/`done` sit behind the
   deploy-probe (fork b) and ship-audit-authority (fork a) decisions, which are NOT implemented.
