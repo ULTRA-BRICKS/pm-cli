@@ -35,7 +35,7 @@ pm executors [--from-file <f>] [--json]          # the executor ledger (harness/
 pm route [<id>] [--risk low|normal|high] [--from-file <f>] [--json]   # read-only recommendation
 pm report queue|stuck|retro|monthly [--month YYYY-MM] [--json]
 pm queue [--json] [--category <c>] [--state <s>]
-pm why <id>                                    # current state, legal next moves, missing evidence
+pm why <id> [--json]                           # current state, legal next moves, missing evidence
 pm sprint create --name <n> [--goal <g>]       # -> prints a fresh sprint id
 pm sprint add <sprint_id> <item_id> [--estimate <n>]   # pull a work item in + estimate it
 pm sprint start <sprint_id>                    # commit scope; freezes further `add`

@@ -3,11 +3,17 @@
 Read-only. Research #255 lists ``pm why`` as a Release-1 surface: given the projection, say WHY
 an item sits where it does — its state, the legal next moves, the evidence it still needs, and any
 recorded inconsistencies. No dispatch, no mutation.
+
+``--json`` (tg-cli#next-command, HYP investigation #187) mirrors ``pm route --json``'s pattern: a
+single JSON object built on top of ``WorkItem.to_dict()`` plus the same next-move computation the
+text view already does, so a consumer (tg-cli's ``/next`` Telegram command) can compose a live
+status card without parsing the human-readable text.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from ..labels import pm_labels
@@ -21,6 +27,7 @@ HELP = "explain a work item: current state, legal next moves, missing evidence"
 
 def configure(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("id", help="work-item id")
+    parser.add_argument("--json", action="store_true", help="emit a JSON object instead of text")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -31,6 +38,37 @@ def run(args: argparse.Namespace) -> int:
         print(f"error: no work item `{args.id}`", file=sys.stderr)
         return 2
     defn = m.get(item.state)
+    if args.json:
+        print(json.dumps(_to_json(m, defn, item), ensure_ascii=False))
+        return 0
+    _print_text(m, defn, item)
+    return 0
+
+
+def _to_json(m: StateMachine, defn: WorkStateDefinition | None, item: WorkItem) -> dict:
+    data = item.to_dict()
+    data["pm_labels"] = pm_labels(
+        item, m
+    )  # the pm.stage/pm.blocked/pm.health labels (text view's "labels:")
+    data["next"] = _next_moves(m, defn, item)
+    return data
+
+
+def _next_moves(m: StateMachine, defn: WorkStateDefinition | None, item: WorkItem) -> dict:
+    if defn is None:
+        return {"terminal": False, "unknown_state": True, "moves": []}
+    if defn.terminal:
+        return {"terminal": True, "unknown_state": False, "moves": []}
+    have = item.evidence_kinds()
+    moves = []
+    for nxt in defn.allowed_next:
+        target = m.get(nxt)
+        missing = [k for k in (target.evidence_required if target else []) if k not in have]
+        moves.append({"state": nxt, "missing_evidence": missing})
+    return {"terminal": False, "unknown_state": False, "moves": moves}
+
+
+def _print_text(m: StateMachine, defn: WorkStateDefinition | None, item: WorkItem) -> None:
     print(f"{item.id}  [{item.state}]  {item.title}")
     if item.project_id:
         print(f"  project:  {item.project_id}")
@@ -41,7 +79,6 @@ def run(args: argparse.Namespace) -> int:
     _print_deps(item)
     _print_next(m, defn, item)
     _print_errors(item)
-    return 0
 
 
 def _print_deps(item: WorkItem) -> None:
