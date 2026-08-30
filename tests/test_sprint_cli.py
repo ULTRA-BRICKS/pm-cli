@@ -126,6 +126,22 @@ def test_sprint_name_with_c1_terminal_escape_is_rendered_safely(pm_home: Path, c
     assert "\\x9d" in out  # survives as a visible, inert escape, not silently dropped
 
 
+def test_sprint_name_with_carriage_return_injection_is_rendered_safely(
+    pm_home: Path, capsys
+) -> None:
+    # Regression: the C0 control-char sweep's ranges (\x00-\x08, \x0b\x0c, \x0e-\x1f) had a gap
+    # at \x0d (CR) -- carriage return isn't tab/newline (the two controls this module explicitly
+    # lets pass through for prose) and reaches a real terminal, which overwrites the start of the
+    # current line, letting a hand-edited log entry spoof `sprint list`/`status` output.
+    evil_name = "legit" + "\r" + "FORGED"
+    assert _run("sprint", "create", "--name", evil_name) == 0
+    capsys.readouterr()
+    assert _run("sprint", "list") == 0
+    out = capsys.readouterr().out
+    assert "\r" not in out
+    assert "\\r" in out  # survives as a visible, inert escape, not silently dropped
+
+
 def test_sprint_and_item_ids_with_terminal_escapes_are_rendered_safely(
     pm_home: Path, capsys
 ) -> None:

@@ -12,7 +12,7 @@ from ..projection import build_projection
 from ..states import StateMachine, default_machine
 from ..store import EventStore, resolve_store_dir
 
-_CONTROL_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-]")
+_CONTROL_CHARS = re.compile("[\x00-\x08\x0b-\x1f\x7f-]")
 
 
 def display_safe(text: str) -> str:
