@@ -49,9 +49,34 @@ class _Kinds:
     # dependency graph
     LINK = EventKind("link")  # a typed dependency edge between two work items
     TIMER = EventKind("timer")  # a scheduled reminder/SLA timer on a work item
+    # sprints (M4): a lightweight grouping of work items, event-sourced the same way as everything
+    # else here — a sprint has its own id and its events use ``item_id`` for the SPRINT id, not a
+    # WorkItem id (``sprint_item_added`` carries the linked work-item id in its payload instead).
+    SPRINT_CREATED = EventKind("sprint_created")
+    SPRINT_ITEM_ADDED = EventKind("sprint_item_added")
+    SPRINT_STARTED = EventKind("sprint_started")
+    SPRINT_CLOSED = EventKind("sprint_closed")
+    SPRINT_RETRO = EventKind("sprint_retro")
 
-    ALL = frozenset({INTAKE, TRANSITION, EVIDENCE, NOTE, INTAKE_CAPTURED,
-                     INTAKE_PROCESSED, INTAKE_FAILED, INTAKE_DEADLETTER, LINK, TIMER})
+    ALL = frozenset(
+        {
+            INTAKE,
+            TRANSITION,
+            EVIDENCE,
+            NOTE,
+            INTAKE_CAPTURED,
+            INTAKE_PROCESSED,
+            INTAKE_FAILED,
+            INTAKE_DEADLETTER,
+            LINK,
+            TIMER,
+            SPRINT_CREATED,
+            SPRINT_ITEM_ADDED,
+            SPRINT_STARTED,
+            SPRINT_CLOSED,
+            SPRINT_RETRO,
+        }
+    )
 
 
 # Expose the kinds as attributes on ``EventKind`` for ergonomic ``EventKind.INTAKE`` access.
@@ -65,6 +90,11 @@ EventKind.INTAKE_FAILED = _Kinds.INTAKE_FAILED
 EventKind.INTAKE_DEADLETTER = _Kinds.INTAKE_DEADLETTER
 EventKind.LINK = _Kinds.LINK
 EventKind.TIMER = _Kinds.TIMER
+EventKind.SPRINT_CREATED = _Kinds.SPRINT_CREATED
+EventKind.SPRINT_ITEM_ADDED = _Kinds.SPRINT_ITEM_ADDED
+EventKind.SPRINT_STARTED = _Kinds.SPRINT_STARTED
+EventKind.SPRINT_CLOSED = _Kinds.SPRINT_CLOSED
+EventKind.SPRINT_RETRO = _Kinds.SPRINT_RETRO
 EventKind.ALL = _Kinds.ALL
 
 
@@ -86,9 +116,15 @@ class Event:
     def to_json(self) -> str:
         """Serialize to a single-line JSON object with a fixed key order (stable log diffs)."""
         return json.dumps(
-            {"id": self.id, "ts": self.ts, "kind": self.kind,
-             "item_id": self.item_id, "payload": self.payload},
-            ensure_ascii=False, separators=(",", ":"),
+            {
+                "id": self.id,
+                "ts": self.ts,
+                "kind": self.kind,
+                "item_id": self.item_id,
+                "payload": self.payload,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
         )
 
     @classmethod
@@ -96,12 +132,20 @@ class Event:
         """Parse one JSONL record. Raises ``ValueError``/``KeyError`` on a malformed line."""
         raw = json.loads(line)
         return cls(
-            id=str(raw["id"]), ts=str(raw["ts"]), kind=str(raw["kind"]),
-            item_id=str(raw.get("item_id", "")), payload=dict(raw.get("payload") or {}),
+            id=str(raw["id"]),
+            ts=str(raw["ts"]),
+            kind=str(raw["kind"]),
+            item_id=str(raw.get("item_id", "")),
+            payload=dict(raw.get("payload") or {}),
         )
 
 
 def new_event(kind: str, item_id: str, payload: dict | None = None) -> Event:
     """Mint a fresh event with a random id and a UTC timestamp."""
-    return Event(id=uuid.uuid4().hex, ts=_utc_now_iso(), kind=kind,
-                 item_id=item_id, payload=dict(payload or {}))
+    return Event(
+        id=uuid.uuid4().hex,
+        ts=_utc_now_iso(),
+        kind=kind,
+        item_id=item_id,
+        payload=dict(payload or {}),
+    )
