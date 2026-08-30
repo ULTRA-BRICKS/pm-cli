@@ -52,6 +52,20 @@ def test_store_read_skips_blank_and_bad_lines(pm_home: Path) -> None:
     assert len(read) == 1  # the one good record survives
 
 
+def test_store_read_skips_a_line_with_a_wrong_shaped_field(pm_home: Path) -> None:
+    # Regression: valid JSON but the WRONG SHAPE (e.g. a scalar where "payload" must be an
+    # object) raised an uncaught TypeError from `dict(raw.get("payload") or {})` -- a TypeError,
+    # not a JSON-decode error, but the same "malformed/foreign line" class every OTHER replay
+    # reader in this codebase must tolerate, not crash on.
+    store = EventStore(resolve_store_dir())
+    store.append(new_event(EventKind.INTAKE, "w1", {"title": "a"}))
+    log = store.log_path
+    with log.open("a", encoding="utf-8") as fh:
+        fh.write('{"id":"x","ts":"2026-01-01T00:00:00Z","kind":"intake","payload":1}\n')
+    read = store.read_all()
+    assert len(read) == 1  # the malformed-shape line was skipped, not raised
+
+
 def test_resolve_store_dir_honors_pm_home(pm_home: Path) -> None:
     assert resolve_store_dir() == pm_home
 

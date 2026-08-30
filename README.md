@@ -28,7 +28,7 @@ pm ingest --source telegram [--since <3d>] [--from-file <f>] [--dry-run] [--json
 pm dlq [--json] [--status unprocessed|processed|deadletter]
 pm link <from> <type> <target> [--reason <r>]   # blocks|waits_for|duplicates|supersedes|relates_to
 pm timer <id> --at <iso> [--kind <k>] [--reason <r>]
-pm reminders [--json]                            # blocked/unblocked, stale, duplicate, cycle, timer
+pm reminders [--json]                            # blocked/unblocked, stale, duplicate, cycle, timer, sprint
 pm reconcile --source pr [--from-file <f>] [--dry-run] [--json]
 pm reconcile --source rig [--repo-dir <dir>] [--from-file <f>] [--json]
 pm executors [--from-file <f>] [--json]          # the executor ledger (harness/model/quota)
@@ -36,9 +36,33 @@ pm route [<id>] [--risk low|normal|high] [--from-file <f>] [--json]   # read-onl
 pm report queue|stuck|retro|monthly [--month YYYY-MM] [--json]
 pm queue [--json] [--category <c>] [--state <s>]
 pm why <id>                                    # current state, legal next moves, missing evidence
+pm sprint create --name <n> [--goal <g>]       # -> prints a fresh sprint id
+pm sprint add <sprint_id> <item_id> [--estimate <n>]   # pull a work item in + estimate it
+pm sprint start <sprint_id>                    # commit scope; freezes further `add`
+pm sprint status <sprint_id> [--json]          # progress, joined live against work-item states
+pm sprint close <sprint_id>
+pm sprint retro <sprint_id> [--note <text>] [--json]   # record a note, or view with no --note
+pm sprint list [--json]
 pm doctor                                      # store writability + FSM integrity
 pm version
 ```
+
+## Sprints (Milestone 4)
+
+A sprint is a lightweight, time-boxed grouping of work items — event-sourced exactly like
+everything else here (no parallel mutable store): `create` names it, `add` pulls a work item in
+with an estimate (repeatable — this is "plan"), `start` commits the scope and freezes further
+`add`s, `status`/`retro` are read-only views joined LIVE against the real work-item projection (so
+a sprint's notion of "done" can never drift from an item's own FSM state), and `close` + `retro
+--note` close the loop.
+
+"Autonomous" here respects the same Release-1 boundary as the rest of pm (it observes and
+reconciles, it does not dispatch): `pm reminders` — the same surface the `pm-reminders-push` cron
+already pushes to Telegram — now also nudges on sprint lifecycle events with no new dispatch
+machinery: `sprint-stale-planning` (still `planning`, untouched — no `add`/`start` — past the
+threshold), `sprint-ready-to-close` (every item
+terminal, but the sprint itself hasn't been closed), and `sprint-needs-retro` (closed with no retro
+notes yet — the part of the loop most likely to get skipped).
 
 `pm ingest --source task` reads your task-cli tickets (via `task list --all --json`, run in the
 `--repo-dir` directory), projects each into a deduped WorkItem (`task:<id>`), and records its url as
