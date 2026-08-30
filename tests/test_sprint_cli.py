@@ -142,6 +142,44 @@ def test_sprint_name_with_carriage_return_injection_is_rendered_safely(
     assert "\\r" in out  # survives as a visible, inert escape, not silently dropped
 
 
+def test_sprint_name_with_lone_surrogate_is_rendered_safely(pm_home: Path, capsys) -> None:
+    # Regression: a hand-edited/foreign JSONL log line can carry an ESCAPED lone surrogate
+    # (`"name":"\ud800"` as literal text) -- json.loads happily decodes that into a Python str
+    # holding the real surrogate code point (Python tolerates lone surrogates internally, even
+    # though they can't round-trip through json.dumps(ensure_ascii=False), which is why this
+    # event is written as a raw line rather than via EventStore.append()/new_event(), the same
+    # way a foreign writer's hand-edited line would arrive). display_safe's old control-char
+    # sweep didn't touch surrogates, so printing this to a real UTF-8 terminal raised
+    # UnicodeEncodeError, taking down `sprint list`/`status`/`retro` entirely on one malformed
+    # record instead of rendering it safely.
+    store = open_store()
+    store.directory.mkdir(parents=True, exist_ok=True)
+    raw_line = (
+        '{"id":"evilsurrogate0000000000000000","ts":"2026-08-30T00:00:00.000000Z",'
+        '"kind":"sprint_created","item_id":"sprint:evil-surrogate",'
+        '"payload":{"name":"legit\\ud800FORGED"}}'
+    )
+    with store.log_path.open("a", encoding="utf-8") as fh:
+        fh.write(raw_line + "\n")
+    capsys.readouterr()
+
+    assert _run("sprint", "list") == 0  # must not raise UnicodeEncodeError
+    out = capsys.readouterr().out
+    assert chr(0xD800) not in out
+    assert "\\ud800" in out  # survives as a visible, inert escape, not silently dropped
+
+
+def test_display_safe_covers_low_surrogate_and_leaves_non_ascii_untouched() -> None:
+    # Companion to the lone-surrogate CLI regression above: the escaped range must be a single
+    # contiguous \ud800-\udfff (both the high AND low surrogate halves), not just the range's
+    # endpoints -- and it must not clobber ordinary non-ASCII prose, which sits well outside the
+    # C0/C1/surrogate ranges entirely.
+    from pmlib.commands._shared import display_safe
+
+    assert display_safe("legit" + chr(0xDC00) + "FORGED") == "legit\\udc00FORGED"
+    assert display_safe("café 日本 Привет") == "café 日本 Привет"
+
+
 def test_sprint_and_item_ids_with_terminal_escapes_are_rendered_safely(
     pm_home: Path, capsys
 ) -> None:
