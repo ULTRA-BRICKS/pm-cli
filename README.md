@@ -33,7 +33,7 @@ pm reconcile --source pr [--from-file <f>] [--dry-run] [--json]
 pm reconcile --source rig [--repo-dir <dir>] [--from-file <f>] [--json]
 pm executors [--from-file <f>] [--json]          # the executor ledger (harness/model/quota)
 pm route [<id>] [--risk low|normal|high] [--from-file <f>] [--json]   # read-only recommendation
-pm report queue|stuck|retro|monthly [--month YYYY-MM] [--json]
+pm report queue|stuck|retro|monthly|metrics|aging [--month YYYY-MM] [--json]
 pm queue [--json] [--category <c>] [--state <s>]
 pm why <id> [--json]                           # current state, legal next moves, missing evidence
 pm sprint create --name <n> [--goal <g>]       # -> prints a fresh sprint id
@@ -105,8 +105,15 @@ stats, not spend), and it is strictly read-only — it writes no events and disp
 `pm report` is the read-only reporting surface over the whole ledger: `queue` (counts by category
 and health), `stuck` (blocked/exception states, no-progress, cycles, expired timers, dead-lettered
 intakes), `retro` (per-item retrospective facts — trigger, recovery, time-in-problem — plus
-recurring-pattern counts), and `monthly` (a month grouped product-vs-process). Every number carries
-the item ids behind it, so it is traceable back to the event log — never a vanity metric.
+recurring-pattern counts), `monthly` (a month grouped product-vs-process), `metrics` (average and p50/p90 time-in-status per lifecycle category, from consecutive
+transition timestamps), and `aging` (items whose current-state age exceeds the per-state SLA).
+Every number carries the item ids behind it, so it is traceable back to the event log — never a
+vanity metric.
+
+`bin/pm-metrics-digest` is an optional cron/launchd sibling of `bin/pm-reminders-push`. It
+always sends a weekly flow-metrics pulse (`tg --format html --tag report`, title
+`Weekly flow metrics (pm)`). Dry-run: `PM_PUSH_DRY_RUN=1 bin/pm-metrics-digest` prints the
+body and sends nothing.
 
 The event log lives at `$PM_HOME/events.jsonl` (default `$XDG_STATE_HOME/pm` or
 `~/.local/state/pm`).

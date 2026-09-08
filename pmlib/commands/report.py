@@ -1,4 +1,4 @@
-"""``pm report <kind>`` — the read-only reporting surface (queue / stuck / retro / monthly).
+"""``pm report <kind>`` — the read-only reporting surface (queue / stuck / retro / monthly / metrics / aging).
 
 Renders a report from the projection + the event log; every number is traceable to the item ids
 behind it. Read-only: writes no events, dispatches nothing. ``--month`` scopes the monthly report.
@@ -13,13 +13,13 @@ import sys
 from datetime import datetime, timezone
 
 from ..projection import build_intake_ledger
-from ..reports import Report, monthly_report, queue_report, retro_report, stuck_report
+from ..reports import Report, aging_report, metrics_report, monthly_report, queue_report, retro_report, stuck_report
 from ._shared import load_items, machine, open_store
 
 NAME = "report"
-HELP = "render a report (queue | stuck | retro | monthly)"
+HELP = "render a report (queue | stuck | retro | monthly | metrics | aging)"
 
-_KINDS = ("queue", "stuck", "retro", "monthly")
+_KINDS = ("queue", "stuck", "retro", "monthly", "metrics", "aging")
 _MONTH_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")  # YYYY-MM with a real month 01-12
 
 
@@ -53,6 +53,10 @@ def _build(args: argparse.Namespace, events: list, items: dict, m, now: datetime
         return stuck_report(items, m, now, build_intake_ledger(events))
     if args.kind == "retro":
         return retro_report(items, m, now)
+    if args.kind == "metrics":
+        return metrics_report(items, m, now)
+    if args.kind == "aging":
+        return aging_report(items, m, now)
     month = args.month or now.strftime("%Y-%m")
     return monthly_report(events, items, m, month)
 
@@ -67,7 +71,16 @@ def _print_text(report: Report) -> None:
     for group, sections in report.groups.items():
         print(f"\n[{group}]")
         for s in sections:
-            print(f"  {s.label:<16} {s.count:>4}   {', '.join(s.item_ids[:8])}")
+            if report.kind == "metrics" and s.mean_seconds is not None:
+                print(
+                    f"  {s.label:<16} n={s.count:<4}  "
+                    f"mean={_format_seconds(s.mean_seconds)}  "
+                    f"p50={_format_seconds(s.p50_seconds or 0)}  "
+                    f"p90={_format_seconds(s.p90_seconds or 0)}  "
+                    f"{', '.join(s.item_ids[:8])}"
+                )
+            else:
+                print(f"  {s.label:<16} {s.count:>4}   {', '.join(s.item_ids[:8])}")
     for entry in report.entries:
         print(f"  - {_entry_line(entry)}")
     for pat in report.patterns:
@@ -75,9 +88,30 @@ def _print_text(report: Report) -> None:
 
 
 def _entry_line(entry: dict) -> str:
+    if "age_seconds" in entry:  # an aging row
+        return (
+            f"{entry['item_id']:<12} {entry.get('state', ''):<22} "
+            f"age={_format_seconds(entry['age_seconds'])}  "
+            f"threshold={_format_seconds(entry['threshold_seconds'])}"
+        )
     if "trigger_state" in entry:  # a retro fact
         status = "recovered" if entry.get("recovered") else "UNRESOLVED"
         secs = entry.get("time_in_problem_seconds")
         dur = f" ({secs}s)" if secs is not None else ""
         return f"{entry['item_id']:<12} {entry['trigger_state']:<22} {status}{dur}"
     return f"{entry.get('kind', ''):<14} {entry['item_id']}  {entry.get('detail', '')}"
+
+
+def _format_seconds(seconds: int) -> str:
+    """Human duration for text reports; JSON keeps raw seconds."""
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, sec = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {sec}s" if sec else f"{minutes}m"
+    hours, minutes = divmod(minutes, 60)
+    if hours < 24:
+        return f"{hours}h {minutes}m" if minutes else f"{hours}h"
+    days, hours = divmod(hours, 24)
+    return f"{days}d {hours}h" if hours else f"{days}d"

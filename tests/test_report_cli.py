@@ -1,4 +1,4 @@
-"""`pm report queue|stuck|retro|monthly` end-to-end (read-only)."""
+"""`pm report queue|stuck|retro|monthly|metrics|aging` end-to-end (read-only)."""
 
 from __future__ import annotations
 
@@ -53,6 +53,37 @@ def test_report_monthly_json(pm_home: Path, capsys) -> None:
     assert _run("report", "monthly", "--month", month, "--json") == 0
     rep = json.loads(capsys.readouterr().out)
     assert "product" in rep["groups"] and "process" in rep["groups"]
+
+
+def test_report_metrics_json(pm_home: Path, capsys) -> None:
+    _seed(["classified", "ticketed", "ready"])
+    capsys.readouterr()
+    assert _run("report", "metrics", "--json") == 0
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["kind"] == "metrics"
+    assert "by_category" in rep["groups"]
+    for section in rep["groups"]["by_category"]:
+        assert "mean_seconds" in section
+        assert "p50_seconds" in section
+        assert "p90_seconds" in section
+
+
+def test_report_aging_json(pm_home: Path, capsys) -> None:
+    _run("record", "intake", "--id", "a", "--title", "x")
+    capsys.readouterr()
+    assert _run("report", "aging", "--json") == 0
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["kind"] == "aging"
+    assert "entries" in rep
+
+
+def test_report_help_lists_metrics(pm_home: Path, capsys) -> None:
+    with pytest.raises(SystemExit) as exc:
+        _run("report", "--help")
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    assert "metrics" in out
+    assert "aging" in out
 
 
 def test_report_rejects_unknown_kind(pm_home: Path, capsys) -> None:
