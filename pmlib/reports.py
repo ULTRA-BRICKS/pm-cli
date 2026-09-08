@@ -1,6 +1,6 @@
 """Reports — the read-only reporting surface over the ledger (research #255's whole point).
 
-All four builders are PURE (projection/log + a clock -> a ``Report``). The design warns that
+Builders are PURE (projection/log + a clock -> a ``Report``). The design warns that
 monthly reports become vanity metrics unless every number links to underlying events, so EVERY
 count carries the item ids behind it (``ReportSection.item_ids``) — a reader can trace any number
 back to the work items (and thence the log) that produced it.
@@ -11,16 +11,23 @@ back to the work items (and thence the log) that produced it.
 - ``retro_report``  — per-item retrospective facts for work that passed through a problem state
   (trigger, recovery, time-in-problem, project) + recurring-pattern counts.
 - ``monthly_report``— a month grouped PRODUCT vs PROCESS, each metric linking its item ids.
+- ``metrics_report``— average / p50 / p90 time-in-status per lifecycle category, from
+  consecutive transition timestamps (re-entries accumulate; clock passed in).
+- ``aging_report``  — items whose current-state age exceeds the state's ``sla_seconds``
+  (default: the reminders no-progress window). Reuses ``current_state_age_seconds``.
+- ``aging_report``  — items whose current-state age exceeds the state's ``sla_seconds``
+  (default: the reminders no-progress window). Reuses ``current_state_age_seconds``.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from .labels import pm_health
-from .reminders import compute_reminders, parse_iso
+from .reminders import DEFAULT_NO_PROGRESS_SECONDS, compute_reminders, parse_iso
 from .states import WorkStateCategory
 
 if TYPE_CHECKING:  # annotation-only
@@ -43,8 +50,19 @@ class ReportSection:
     count: int
     item_ids: list[str] = field(default_factory=list)
 
+    mean_seconds: int | None = None
+    p50_seconds: int | None = None
+    p90_seconds: int | None = None
+
     def to_dict(self) -> dict:
-        return {"label": self.label, "count": self.count, "item_ids": list(self.item_ids)}
+        out = {"label": self.label, "count": self.count, "item_ids": list(self.item_ids)}
+        if self.mean_seconds is not None:
+            out["mean_seconds"] = self.mean_seconds
+        if self.p50_seconds is not None:
+            out["p50_seconds"] = self.p50_seconds
+        if self.p90_seconds is not None:
+            out["p90_seconds"] = self.p90_seconds
+        return out
 
 
 @dataclass
@@ -156,6 +174,114 @@ def _retro_passes(item: WorkItem, machine: StateMachine, now: datetime) -> list[
             "time_in_problem_seconds": secs, "project": item.project_id,
         })
     return out
+
+
+# ── metrics ────────────────────────────────────────────────────────────────────────────────
+def category_dwell_seconds(item: WorkItem, machine: StateMachine, now: datetime) -> dict[str, int]:
+    """Accumulated seconds per lifecycle category for one item. Re-entries sum.
+
+    Duration in the category of ``trans.to`` is ``next.ts - trans.ts``; the current state's
+    dwell is ``now - last.ts``. Categories with zero dwell are omitted.
+    """
+    totals: dict[str, int] = {}
+    history = item.history
+    for idx, trans in enumerate(history):
+        start = parse_iso(trans.ts)
+        if start is None:
+            continue
+        if idx + 1 < len(history):
+            end = parse_iso(history[idx + 1].ts)
+            if end is None:
+                continue
+        else:
+            end = now
+        defn = machine.get(trans.to)
+        if defn is None:
+            continue
+        cat = defn.category.value
+        totals[cat] = totals.get(cat, 0) + max(0, int((end - start).total_seconds()))
+    return {k: v for k, v in totals.items() if v > 0}
+
+
+def current_state_age_seconds(item: WorkItem, now: datetime) -> int | None:
+    """Seconds in the current state: ``now - last.ts``, or ``created_at`` when history is empty."""
+    stamp = item.history[-1].ts if item.history else item.created_at
+    start = parse_iso(stamp)
+    if start is None:
+        return None
+    return max(0, int((now - start).total_seconds()))
+
+
+def _percentile(values: list[int], p: float) -> int:
+    """Linear interpolation between closest ranks (Hyndman & Fan type 7); rounded to int seconds."""
+    xs = sorted(values)
+    n = len(xs)
+    if n == 1:
+        return xs[0]
+    k = (n - 1) * p
+    lo_i = math.floor(k)
+    hi_i = math.ceil(k)
+    if lo_i == hi_i:
+        return int(xs[int(k)])
+    lo, hi = xs[lo_i], xs[hi_i]
+    return int(round(lo + (hi - lo) * (k - lo_i)))
+
+
+def metrics_report(items: dict[str, WorkItem], machine: StateMachine, now: datetime) -> Report:
+    """Per-category mean / p50 / p90 of per-item accumulated dwell. JSON seconds; clock in."""
+    per_cat: dict[str, dict[str, int]] = {cat.value: {} for cat in WorkStateCategory}
+    for item in items.values():
+        for cat, secs in category_dwell_seconds(item, machine, now).items():
+            per_cat[cat][item.id] = secs
+    sections: list[ReportSection] = []
+    for cat in WorkStateCategory:
+        by_item = per_cat[cat.value]
+        if not by_item:
+            continue
+        vals = list(by_item.values())
+        sections.append(ReportSection(
+            label=cat.value,
+            count=len(vals),
+            item_ids=sorted(by_item),
+            mean_seconds=int(round(sum(vals) / len(vals))),
+            p50_seconds=_percentile(vals, 0.5),
+            p90_seconds=_percentile(vals, 0.9),
+        ))
+    return Report(kind="metrics", scope=now.isoformat(), total=len(items),
+                  groups={"by_category": sections})
+
+
+
+# Terminal delivery/post states plus ``deployed`` (not terminal, but finished shipping).
+_AGING_SKIP_STATES = frozenset({"done", "deployed", "cancelled", "parked"})
+
+
+def aging_report(
+    items: dict[str, WorkItem],
+    machine: StateMachine,
+    now: datetime,
+    default_seconds: int = DEFAULT_NO_PROGRESS_SECONDS,
+) -> Report:
+    """Items whose time in the CURRENT state exceeds the per-state SLA. Healthy states can age."""
+    entries: list[dict] = []
+    for item in sorted(items.values(), key=lambda i: i.id):
+        defn = machine.get(item.state)
+        if defn is None or defn.terminal or item.state in _AGING_SKIP_STATES:
+            continue
+        age = current_state_age_seconds(item, now)
+        if age is None:
+            continue
+        threshold = defn.sla_seconds if defn.sla_seconds is not None else default_seconds
+        if age <= threshold:
+            continue
+        entries.append({
+            "item_id": item.id, "state": item.state, "category": defn.category.value,
+            "age_seconds": age, "threshold_seconds": threshold,
+        })
+    ids = [e["item_id"] for e in entries]
+    return Report(kind="aging", scope=now.isoformat(), total=len(entries),
+                  groups={"summary": [_section("aging", ids)] if ids else []},
+                  entries=entries)
 
 
 # ── monthly ────────────────────────────────────────────────────────────────────────────────

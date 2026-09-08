@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# bin/pm-metrics-digest — cron-driven weekly flow-metrics pulse: render metrics/aging/queue
+# into one Telegram digest and ALWAYS send it (unlike pm-reminders-push, which is silent on
+# zero reminders). A weekly pulse with nothing to report is still a pulse. Errors are loud
+# WITHIN tg's reach: an ERR trap logs locally and pushes a distinct failure ping. If the
+# broken component is tg/bun/network itself, the local log line plus the nonzero exit
+# (visible to cron) are the surviving evidence.
+# Known floors (accepted, not bugs): no concurrency lock — the job runs ~1s once a week,
+# and a stale lock after a hard kill would block every future run.
+set -euo pipefail
+
+# Cron's PATH is /usr/bin:/bin — too bare for the transitive deps: `pm` needs a Homebrew
+# python3 (pm requires >=3.11; /usr/bin/python3 is 3.9), `tg`'s shebang needs bun
+# (~/.bun/bin). Prepend rather than overwrite so a caller-supplied PATH still works.
+export PATH="/opt/homebrew/bin:$HOME/.bun/bin:$HOME/.files/bin:$HOME/.local/bin:$PATH"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PM="$SCRIPT_DIR/pm"
+TG="${PM_PUSH_TG:-$HOME/.files/bin/tg}"
+LOG="${PM_PUSH_LOG:-$HOME/.local/state/pm/metrics-digest.log}"
+
+TG_FLAGS=(--no-feature auto-attach --no-feature autolink-tasks --no-feature autolink-msgrefs)
+
+fail_ping() {
+  echo "$(date '+%Y-%m-%dT%H:%M:%S%z') pm-metrics-digest FAILED at line $1"
+  "$TG" --tag problem "${TG_FLAGS[@]}" --title "pm-metrics-digest FAILED" \
+    "pm-metrics-digest failed at line $1 — see $LOG" || true
+}
+trap 'fail_ping $LINENO' ERR
+
+mkdir -p "$(dirname "$LOG")"
+exec 3>&1 >>"$LOG" 2>&1
+
+# Body is built by the pure Python renderer from the same report functions `pm report`
+# metrics/aging/queue use — no separate computation path.
+body="$(cd "$ROOT" && python3 -m pmlib.digest)"
+
+if [[ "${PM_PUSH_DRY_RUN:-}" == "1" ]]; then
+  printf '%s\n' "$body" >&3
+  exit 0
+fi
+
+"$TG" --format html --tag report "${TG_FLAGS[@]}" \
+  --title "Weekly flow metrics (pm)" "$body"
