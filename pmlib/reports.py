@@ -15,8 +15,6 @@ back to the work items (and thence the log) that produced it.
   consecutive transition timestamps (re-entries accumulate; clock passed in).
 - ``aging_report``  — items whose current-state age exceeds the state's ``sla_seconds``
   (default: the reminders no-progress window). Reuses ``current_state_age_seconds``.
-- ``aging_report``  — items whose current-state age exceeds the state's ``sla_seconds``
-  (default: the reminders no-progress window). Reuses ``current_state_age_seconds``.
 """
 
 from __future__ import annotations
