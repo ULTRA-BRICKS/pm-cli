@@ -1,12 +1,20 @@
 # rig.yaml — CI provisioning for pm-cli, applied by `rig apply`.
 # See: rig status (drift), rig apply (converge). Schema in rig-cli docs/config-schema.md.
 #
-# Scope note: this file exists ONLY to give the repo a real CI gate. pm-cli had ZERO CI
+# Scope note: this file started out ONLY giving the repo a real CI gate. pm-cli had ZERO CI
 # configured, which made `gh ship` correctly refuse every PR ("no CI is a failed gate, not
-# a free pass"). This file is applied narrowly with `rig apply --only ci` — every other
-# rig-managed area (skills / agent-hooks / git-hooks dispatcher / mcp / harness / models /
-# github ruleset) is intentionally left untouched here. Widening this repo's rig scope
-# beyond CI is a separate decision, not a side effect of unblocking a merge.
+# a free pass"). Every rig-managed area beyond CI (skills / agent-hooks / git-hooks dispatcher /
+# mcp / harness / models / github ruleset) is still intentionally left untouched — EXCEPT for
+# the single `agent_hooks.worktree_only` key below, added 2026-09-07 as a deliberate, separate
+# decision (Alex: agents were editing/branching directly in ecosystem repos' primary checkouts).
+# That key adds ONLY worktree_only on top of the global agent_hooks block
+# (~/.config/rig/config.yaml, enabled/all) — it does not change what hooks install, it just
+# gates worktree-only-writes (pre-write) + pin-primary-worktree (pre-bash): primary checkout
+# stays on the default branch for merge/pull/read-only only, all authoring happens in a
+# separate `git worktree add` tree. See rig-cli AGENTS.md "Harness workflow guards" and the
+# RIG_HATCH_REQUEST_WORKTREE_ONLY_WRITES / RIG_HATCH_REQUEST_PIN_PRIMARY_WORKTREE hatches for a
+# deliberate one-off bypass. Widening this repo's rig scope any FURTHER beyond CI + this one
+# hook key is still a separate decision, not a side effect of unblocking a merge.
 #
 # Items chosen for a small personal Python CLI (stdlib-only runtime, pytest + ruff, no
 # project dependencies):
@@ -20,6 +28,9 @@
 #                   status check on this first PR.
 
 version: 1
+
+agent_hooks:
+  worktree_only: true
 
 ci:
   enabled: true
