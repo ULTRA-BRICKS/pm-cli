@@ -1,0 +1,237 @@
+{
+  "repository": "alex-mextner/pm-cli",
+  "plan_ref": "94a1825f2f9e611031dd6b74eb1de2d8b3130c56",
+  "plan_sha256": "0a6da581fc990ee7cb27ca4bdc3cd2ee847336a16b6f5ff31f315461b6d592d1",
+  "started_at": "2026-09-10T13:36:30.614827+00:00",
+  "mode": "apply",
+  "events": [
+    {
+      "number": 29,
+      "result": "parent-created",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    {
+      "number": 2,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "487a12fe034d3dac0cf3e74a5ec624f20b531fb6c340cd5d3e2e845aadeedbc3",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/2"
+    },
+    {
+      "number": 3,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "5cbc9b48b1de76c9a326614c5f544e95bd32f9c6a286523bde9579942c8fdd17",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/3"
+    },
+    {
+      "number": 4,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "4c8df62970e69bad9593192b621888b5ed5935d5e2c3cd088ddf19a93685fed5",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/4"
+    },
+    {
+      "number": 5,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "7440dcd1a2abb996be06d4909494d16de40a7de0a6815705511d9822203deae9",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/5"
+    },
+    {
+      "number": 7,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "de01801119faf1a50e8ad4b51156d206dd359241bb9b80bc02cd636d083a912d",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/7"
+    },
+    {
+      "number": 8,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "2d00f5ec7d2ad5c135af74290345f13560584ad50de37ef5666e85ad0d39aab5",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/8"
+    },
+    {
+      "number": 9,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "2ba443b994f43caa09930dda4303f0766785431ce741525f3929d533eee472c8",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/9"
+    },
+    {
+      "number": 10,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "6d9c6f667296f2d2e3379ea88d3b6333fe490feadc76a992ebdb8cb288d159d0",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/10"
+    },
+    {
+      "number": 11,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "66c918bb34b25cdfe0c4aeea980bd100c02fc2e9aca8e9c35e2e861771145bed",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/11"
+    },
+    {
+      "number": 13,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "57019413fb17b837cb223ea20a434f2f3bda2f6b8d56abb056c8947d05696697",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/13"
+    },
+    {
+      "number": 14,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "d5c8779062fe524437bd48c4375be7de4004846495c95a376d9f1792b4cefc29",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/14"
+    },
+    {
+      "number": 16,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "8f7aac593209441fb9bc5ee924cb0ebbbb65b147820be4d78197eb334f8f287f",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/16"
+    },
+    {
+      "number": 17,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "b30d461c47149447ad8c26da85159eb7b4c3c0d72f54855d1b97e7e0aa553b4c",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/17"
+    },
+    {
+      "number": 19,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "18c3b1f5ed2a04b7a992e51b6e55ec4828b537855ebc6033569438a2880111f9",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/19"
+    },
+    {
+      "number": 21,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "8d7a85ae3bea33805570bbd1c44bbe2e0a3ae03fffedd3c81e0b1858d1bef904",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/21"
+    },
+    {
+      "number": 22,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "947f27a745682610ba9449a8f877c0c76552afa89c92068ae90e3693ce03d6ea",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/22"
+    },
+    {
+      "number": 25,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "b293b762c39b9aeb5b2ffccbc11a83fa41a1d10d9e55ede5269eae08bcbe793b",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/25"
+    },
+    {
+      "number": 26,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "c60679d93982d09a573a0e8a4b92d7d4e4e537ce1a7b297f7a87b875a2f8da7a",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/26"
+    },
+    {
+      "number": 28,
+      "result": "body-updated-readback-verified",
+      "body_sha256": "8ef7e77597b7aecd114757c5ac9ac341cc0f0314fc601e17c9d3f2f44b31cb35",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/28"
+    }
+  ],
+  "parents": {
+    "2": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "3": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "4": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "5": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "7": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "8": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "9": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "10": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "11": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "13": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "14": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "16": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "17": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "19": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "21": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "22": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "25": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "26": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    },
+    "28": {
+      "status": "linked",
+      "url": "https://github.com/alex-mextner/pm-cli/issues/29",
+      "verified_parent": "https://github.com/alex-mextner/pm-cli/issues/29"
+    }
+  },
+  "newly_discovered": [],
+  "counts": {
+    "parent-created": 1,
+    "body-updated-readback-verified": 19
+  },
+  "api_reads": 23,
+  "api_writes": 44,
+  "root": "https://github.com/alex-mextner/pm-cli/issues/29",
+  "finished_at": "2026-09-10T13:38:06.418090+00:00",
+  "planned_issues": 19,
+  "processed_bodies": 19,
+  "native_parents_verified": 19
+}
