@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "source_version": 4,
+  "context": {
+    "repository": "ultrabricks/pm-cli",
+    "repository_id": 1300077282,
+    "source_ref": "f707ee2b2f643a4621121187df442554aa968244",
+    "snapshot_run": "34541300125",
+    "mutations": "body only",
+    "manual_exclusions": []
+  },
+  "mode": "apply",
+  "started_at": "2026-09-10T23:39:36.470448+00:00",
+  "events": [
+    {
+      "key": "pm-cli#29",
+      "number": 29,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "61096902d280e6df2e29e04d3a3ad87bf3d937266600c60d11df7f66391e59f7"
+    },
+    {
+      "key": "pm-cli#28",
+      "number": 28,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "8ef7e77597b7aecd114757c5ac9ac341cc0f0314fc601e17c9d3f2f44b31cb35"
+    },
+    {
+      "key": "pm-cli#26",
+      "number": 26,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "c60679d93982d09a573a0e8a4b92d7d4e4e537ce1a7b297f7a87b875a2f8da7a"
+    },
+    {
+      "key": "pm-cli#21",
+      "number": 21,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "8d7a85ae3bea33805570bbd1c44bbe2e0a3ae03fffedd3c81e0b1858d1bef904"
+    },
+    {
+      "key": "pm-cli#14",
+      "number": 14,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "d5c8779062fe524437bd48c4375be7de4004846495c95a376d9f1792b4cefc29"
+    },
+    {
+      "key": "pm-cli#10",
+      "number": 10,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "6d9c6f667296f2d2e3379ea88d3b6333fe490feadc76a992ebdb8cb288d159d0"
+    },
+    {
+      "key": "pm-cli#5",
+      "number": 5,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "7440dcd1a2abb996be06d4909494d16de40a7de0a6815705511d9822203deae9"
+    },
+    {
+      "key": "pm-cli#4",
+      "number": 4,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "4c8df62970e69bad9593192b621888b5ed5935d5e2c3cd088ddf19a93685fed5"
+    },
+    {
+      "key": "pm-cli#3",
+      "number": 3,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "5cbc9b48b1de76c9a326614c5f544e95bd32f9c6a286523bde9579942c8fdd17"
+    },
+    {
+      "key": "pm-cli#22",
+      "number": 22,
+      "result": "patch-received-awaiting-readback",
+      "observed_before_sha256": "947f27a745682610ba9449a8f877c0c76552afa89c92068ae90e3693ce03d6ea"
+    },
+    {
+      "key": "pm-cli#11",
+      "number": 11,
+      "result": "delivery-uncertain",
+      "observed_before_sha256": "66c918bb34b25cdfe0c4aeea980bd100c02fc2e9aca8e9c35e2e861771145bed"
+    }
+  ],
+  "writes": 10,
+  "complete": false,
+  "fatal": "delivery-uncertain",
+  "product_acceptance": false,
+  "counts": {
+    "patch-received-awaiting-readback": 10,
+    "delivery-uncertain": 1
+  },
+  "pending_write": {
+    "key": "pm-cli#11",
+    "intended_sha256": "e1813e128e2a28dc1888ec5bcae91ac838c54e2316eb95bc3ae79ff82058aa6f"
+  },
+  "readback_error": "HTTPError",
+  "planned": 20,
+  "remaining_or_conflicted": 20,
+  "finished_at": "2026-09-10T23:41:03.158287+00:00"
+}
