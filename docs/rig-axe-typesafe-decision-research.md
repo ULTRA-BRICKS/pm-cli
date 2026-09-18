@@ -6,7 +6,7 @@
 
 Yes: Jev is a candidate semantic evaluator inside the AxE-controlled workflow, not a replacement for its runtime decision function. The model estimates a bounded answer from supplied context; deterministic application policy chooses which permitted AxE effect to emit. A `Choice` answer is data, not an authenticated command. Use an AxE Op for the remote evaluation and admit its result before policy consumes it. This separation is precisely where typed probabilistic output is useful.
 
-The first use is intake classification and requirement-to-node matching in shadow mode. Do not ask Jev to reconstruct Telos's dependency graph, calculate the frontier, approve a plan, grant a lease, mark tests passed or declare a release. Those are existing deterministic or evidence/authority-owned decisions. A high model probability never overrides their contracts.
+The qualification starts with shadow intake classification and requirement-to-node matching, then adds a distinct interleaved semantic code pre-review workload between bounded coding-model steps (master sections 8.3–8.4). Do not ask Jev to reconstruct Telos's dependency graph, calculate the frontier, approve a plan, grant a lease, mark tests passed or declare a release. Those are existing deterministic or evidence/authority-owned decisions. A high model probability never overrides their contracts.
 
 ## 2. What the public interface actually provides
 
@@ -79,3 +79,9 @@ Compare deterministic parsing, the existing permitted general-model path and Jev
 Additional protocol tests cover malformed-but-JSON responses, missing answer IDs, unknown options, invalid distributions, request edits during inference, duplicate delivery, crash before/after response admission, SDK/runtime retry multiplication, timeout/cancellation, quota exhaustion, unauthorized source inclusion and secret-bearing debug logs. Pure AxE and any optional generator lane must be tested on the real runtime with their own retention semantics.
 
 The vendor's [launch benchmarks](https://typesafe.ai/blog/introducing-system-one-models-and-jev) motivate investigation, not an expected speedup for this system. Their schema-validity claims do not prove that the chosen option is semantically right. This note deliberately claims neither lower measured pilot latency/cost nor production reliability. Promotion from shadow to low-risk assistance requires the local experiment; authority, arithmetic and evidence gates stay deterministic regardless of its result.
+
+## 9. Interleaved review and local baseline follow-through
+
+The [interleaved-review research](./rig-axe-interleaved-review-research.md) expands the evaluation beyond intake. It analyzes the Every writing experiment, the typed game-control demonstration and the local Qwen constrained-decoding implementation. None proves our code-review quality or latency. Intermediate findings are revision-bound advice, not final acceptance, authority or another planner. A newer patch invalidates the old evaluation's applicability; repeated receipts cannot deliver feedback twice. Unknown/timeouts stay visible and mandatory final checks remain independent.
+
+The local example's model card names Qwen2.5-1.5B-Instruct and an inference technique; its repository name does not establish newly RLCD-trained weights. Evaluate the unchanged baseline before optional fine-tuning, separate syntax validity from semantic correctness and empirical calibration, and preserve held-out patch-family/language splits. Mac/MLX results are not Linux pilot qualification. No new model was downloaded, trained or invoked in this update.

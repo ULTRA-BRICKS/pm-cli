@@ -149,6 +149,30 @@ Known admitted evaluations are reused on replay; a provider timeout before durab
 
 No provider key or private source data is needed for P0–P3. Hosted evaluation requires explicit scope and verified account privacy/retention terms. Qualification uses English/Russian/mixed fixtures, adversarial inputs, calibrated error-versus-abstention, latency/cost observations, and real-runtime crash/duplicate tests. TypeSafe remains optional; source inspection is not a live model benchmark or production endorsement.
 
+### 8.3. Interleaved semantic pre-review between coding steps
+
+The model-assisted experiment includes a second, distinct shadow workload: **semantic pre-review of a stable patch between bounded coding-model steps**. Intake classification/matching remains the cheapest adapter fixture; it is not the entire evaluation scope. Pre-review aims to detect a narrowly described problem early enough to improve the next step, not certify correctness, replace independent final review, or make every intermediate token a gate.
+
+Trigger from an admitted artifact checkpoint or completed bounded tool step, not every token, keystroke or fixed-rate timer. Applicable deterministic parsing, type/lint checks and exact diff scoping run first. Assemble the smallest authorized context: changed code, relevant specification clauses, interfaces/dependencies and existing check observations. Record omitted/missing context. Code comments instructing the evaluator to approve itself remain untrusted data.
+
+Reuse the evaluation Op and generated VO-backed receipt from section 8.2. Pin pursuit/node, producing attempt, artifact revision, relevant specification basis, context/candidate scope, question/rubric version and model. Bounded questions may ask whether the patch appears to omit a stated error path, changes an unrelated authority boundary, duplicates a named source of truth, or warrants deeper review. Include unknown/not-applicable. These are semantic assessments, not proof that code executes correctly. Batched answers do not establish statistical independence or a sound joint probability.
+
+Policy consumes only a response matching the current requested basis and permitted scope. Coalesce equivalent pending work and bound concurrency, elapsed time, input volume and call/fix budgets. Newer patches supersede pending evaluations without rewriting their eventual historical receipts. Stale results cannot approve, block or revise newer artifacts. Timeout means evaluator-unavailable/abstain, not clean. Continuing during outage is a versioned policy choice; mandatory compiler, security, review and release gates stay enforced. Shadow observations never mutate the plan or worker instructions.
+
+After qualification, explicitly enabled advisory mode may deliver one deduplicated, basis-bound finding to the next coding step through the existing attempt/feedback channel. Stable feedback identity survives receipt replay without restarting a worker twice or resetting its fix budget. Group correlated warnings instead of sending repeated human questions. Value/authority choices retain the human-decision protocol. The evaluator cannot approve, commit, accept risk, grant leases, merge, deploy or close pursuits. Final verification remains independent and artifact-bound even when pre-review finds no problem.
+
+Measure time to a useful finding, per-defect precision/recall, false interruptions, misses caught by final review, extra coding calls, abstention and full-path cost/latency including discarded responses. Website fixtures never count as inference or real AxE evidence. Vendor game demos and writing experiments motivate this workload but supply neither its latency SLO nor code-review accuracy. See [the interleaved-review research](./rig-axe-interleaved-review-research.md).
+
+### 8.4. Local evaluator baseline and the training boundary
+
+Compare a local bounded-output evaluator before commissioning training. The inspected `harshatheg/Qwen-2.5-1B-RLCD` model card describes an inference implementation using Qwen2.5-1.5B-Instruct with parallel constrained decoding, not evidence of new RLCD weights or Jev equivalence. Distinguish valid syntax, semantic accuracy, empirical calibration and action authority. Programmatic enum/JSON assembly establishes only syntax; normalized softmax alone establishes neither accuracy nor calibration; no model score establishes authority.
+
+Qualify source commit, base weights, license, primitive semantics, multi-token candidate handling and resources. Author-reported MLX/M4 Max numbers are not pilot results. A separately approved Mac/MLX benchmark is an external experiment and cannot replace the all-in Linux/ARM64 topology. Any Linux/PyTorch route needs its own packaging/workload tests. The core pilot remains provider optional.
+
+Fine-tuning is separately authorized research, not default startup. Require an unchanged baseline, explicit data rights and bounded budget. Preserve expert-reviewed labels; incumbent model answers are not ground truth. Split by originating repository/request/thread and time where applicable, keeping revisions and near-duplicate patches together. Tune thresholds/calibration on development data, freeze them, and evaluate held-out English/Russian/mixed cases. Report per-defect/per-language errors, abstention/coverage, calibration and full-path latency/resources. Promotion uses the fixed evaluation plus unchanged non-model gates.
+
+A collaborator reporting TypeSafe access is not a credential grant to the pilot or permission to transmit private source. Inspection, interface fixtures and the website require no provider account. Connected inference still requires operator model/data authorization and verified account terms.
+
 ## 9. Telos lifecycle, evidence and human decisions
 
 Preserve Telos's two axes: specification maturity and realization. A request classified as actionable is not necessarily finalized work. Research, alternatives and unanswered questions can block the action. The pilot dispatches only the owner-reported frontier under the required specification/check/leaf conditions; it does not recompute those predicates from issue statuses. A repeated research result should enrich the same evidence trail, not create another unconnected task because the session changed.
@@ -267,6 +291,18 @@ Released availability is owned by authenticated deployer observations admitted t
 
 Live updates preserve drafts, selection, focus and scroll. Concurrent submissions use expected canonical revision and expose a resolvable conflict; no blind overwrite. Escape closes the topmost dismissible layer and restores focus, menus/dialogs support keyboard operation, and command shortcuts do not collide with text editing. Narrow screens wrap content and show clear pending/stale states. Private links re-check authorization. Test these pilot surfaces without claiming every unrelated tasks-app UX defect is fixed.
 
+### 15.3. Bilingual learning and research website
+
+Provide an English/Russian explanation site inspired by state-lib's teaching pattern: an outcome-oriented overview, interactive examples beside explanations, inspectable architecture and clear intended-versus-tested labels. English remains the canonical normative specification. Russian explains the same concepts and links back to that contract, not an independently editable second specification. Switching locale preserves page and meaningful anchor.
+
+Explain the actual Telos-first model: native work, computed frontier, PM execution policy on AxE, task-cli/tasks-app projections, scoped intake, attempts and evidence. Interactive diagram nodes expose useful ownership/contract details. Research separates source claims from local measurements; benchmark ratios and model confidence never become product promises.
+
+The workflow/pre-review laboratory is a deterministic browser fixture, labeled at its controls and results. It supports patch changes during pending evaluation, stale-result rejection, warning/unknown responses, replay deduplication and independent final verification. It sends no data to models, contains no credentials and mutates no real Telos/Tasks records. A future live backend requires separate connection and visible identity; simulated state must never appear as production telemetry.
+
+Pre-render readable locale pages; retain semantic headings/deep links; make navigation/search keyboard-operable with Escape and focus restoration; support reduced motion and narrow viewports. Preserve local example state within the browsing session. Every control works or explains why it is disabled. Test both locales, locale/page/anchor switching, history, keyboard handling, console errors and horizontal overflow. The English master and its source digest are build inputs, not an independently maintained site copy.
+
+Publish only reviewed explanations and approved public references. Never bundle private Slack transcripts, account details, gift/access tokens, provider credentials, unredacted logs or third-party article PDFs. Local preview is not production deployment. Public hosting or live inference is a separately authorized action.
+
 ## 16. The first vertical slice
 
 Use a tiny disposable repository containing a deterministic, deliberately failing behavior and its independent expected-result test. A synthetic Telegram-format request asks to fix it. The adapter records one intake, Telos receives one bounded pursuit proposal and linked action/checks, tasks-app renders that canonical work without creating an independent issue, and a human or pre-approved fixture policy accepts the exact plan. PM policy requests one lease and one worker attempt. The worker edits only that repository; review and QA run independently against the resulting artifact.
@@ -350,6 +386,22 @@ The Telos-first and semantic-evaluation contracts add these acceptance cases:
 
 The matrix also covers disk-full/torn-write recovery, schema-version refusal, Unicode and large payloads, expired evidence URLs, clock skew, quota exhaustion, dead-letter replay, cancellation during an external effect, secret rotation, clean installation and browser keyboard/mobile regression. Each failure records the last durable receipt and the exact recovery boundary. No blanket `pass` is inferred from a process exit code or from mock output.
 
+Additional interleaved-review and bilingual-site cases:
+
+| Case | Required result |
+|---|---|
+| Patch advances during evaluation | Old response is historical only; no current warning/gate mutation. |
+| Receipt or feedback redelivered | One accepted evaluation and at most one feedback action; no repeated launch or budget reset. |
+| Evaluator timeout/unknown | Explicit abstention/unavailability, never a fabricated pass; final gates remain required. |
+| Semantic pre-review misses a seeded defect | Independent final verification may fail; clean semantic output cannot override it. |
+| Adversarial code comment requests approval | Untrusted data; no authority, policy or candidate-set change. |
+| Frequent patches or many questions | Bounded/coalesced work, visible supersession and counted failed/stale calls. |
+| Local output has valid enums but unreliable answers/probabilities | Syntax, accuracy and calibration are reported separately. |
+| Related patches cross train/evaluation splits | Split guard prevents leakage; contaminated results cannot promote a model. |
+| EN/RU switch on a deep link | Equivalent page/anchor and localized controls; English master remains normative. |
+| Site exercises warning/stale/replay/final-failure | Real local fixture transitions only; no provider call or real work mutation. |
+| Site bundle includes private transcript, secret or article PDF | Release check fails; only approved explanatory/public material is packaged. |
+
 ## 18. Milestones and implementation ownership
 
 | Milestone | Deliverable and exit gate | Primary owners |
@@ -358,7 +410,7 @@ The matrix also covers disk-full/torn-write recovery, schema-version refusal, Un
 | P1 — Native intake and domain commands | Scoped intake revisions and idempotent Telos proposals/admission; preserved task-cli quality fields through governed attributes/checks; pending-command and read-projection receipts. No mandatory external issue or second task authority. | Telos model/client owners; tg-cli adapter; task-cli; PM integration. |
 | P2 — Task and feature views | Telos-backed task-cli and tasks-app views; frontend/backend feature catalog, spec-heading links, computed priority/unlocks, explicit boost, evidence/release dimensions and anchored review feedback. Conflicts and legacy isolation tested. | task-cli; tasks-app; Telos projections; review-cli. |
 | P3 — Deterministic execution | Real AxE/PM attempt protocol, one bounded tool worker, independent verification, canonical completion and eventual UI update. Kill-switch, privacy fallback, stale-worker, duplicate and restart gates pass. | Telos/PM agents; harness/supervisor; review/QA. |
-| P4 — Bounded model assistance | Limited coding plus independent review/QA; optional TypeSafe shadow classifier/matcher with pinned inputs/model, validated responses and replay. Promotion requires held-out local results, not vendor benchmarks. | PM policy; permitted model adapters; reviewers. |
+| P4 — Bounded model assistance | Limited coding plus independent review/QA; optional shadow intake/matching and interleaved semantic code pre-review with pinned artifact/context/model, validated responses, abstention and replay. Promotion requires held-out local results, not vendor benchmarks. | PM policy; permitted model adapters; reviewers. |
 | P5 — One connected isolated workflow | Approved chat/topic and dedicated task UI scope; one real request represented canonically in Telos; complete receipts and restore tests. No production merge or deployment. | Operator and integration owners. |
 | P6 — Evaluation and consolidation | Compare practical benefit, integrity and complexity; decide further changes or expansion. Repository consolidation remains a separate decision. | Alex and Danny with measured evidence. |
 
