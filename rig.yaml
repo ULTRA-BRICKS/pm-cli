@@ -39,3 +39,10 @@ ci:
   items:
     tests:       { enabled: true, tier: block }
     secret-scan: { enabled: true, tier: block }
+
+task:
+  backend: forgejo
+  forgejo:
+    url: https://git.hyperide.ai
+    repo: ultrabricks/pm-cli
+    attachment_mode: native
