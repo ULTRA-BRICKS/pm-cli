@@ -223,6 +223,8 @@ The tasks-app integrated mode uses its existing shell, authentication, navigatio
 
 The existing tasks-app PostgreSQL is a permanent product database, not a disposable projection store. It holds standalone records, synchronized task state, binding metadata, sync cursors/receipts, local UI/product fields, imports and integrations. It is not replaced by minigraf or Telos. The sync adapter is optional and removable. Routes resolve binding/origin server-side; neither a forged integration flag nor a generic PATCH may bypass Telos admission for Telos-owned semantics.
 
+Tracked implementation for the optional synchronization contract: **HYP-1514**.
+
 ### 10.1. Completion and synchronization admission
 
 A completion request is a request to verify the target under the current basis, not a write of `status=done`. Canonical satisfaction/done and pursuit closure come only from Telos's checks, confidence and authorized lifecycle. Every task-cli/UI/bulk/integration path targeting a pilot entity must use that admission; direct projection-status writes are refused. The P2 route inventory includes the existing issue PATCH and bulk routes, task-cli entry points, integration handlers including merge-to-Done, and internal jobs; every route must prove origin-scoped refusal before native views are editable. Existing merge-to-Done automation has no authority over native Telos views. Explicit human accept-risk remains a distinct privileged operation, never a disguised passed test.
