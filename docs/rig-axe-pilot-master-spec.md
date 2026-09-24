@@ -402,6 +402,75 @@ Additional interleaved-review and bilingual-site cases:
 | Site exercises warning/stale/replay/final-failure | Real local fixture transitions only; no provider call or real work mutation. |
 | Site bundle includes private transcript, secret or article PDF | Release check fails; only approved explanatory/public material is packaged. |
 
+## 17A. Deterministic coding-agent coordinator delta
+
+Danny's 2026-09-19 coding-agent notes sharpen P3 without changing the authority model above. The coordinator is an **execution plane**, not a second planner or task database. Telos remains the canonical graph of work, dependencies, checks, specification links and computed priority. An execution attempt references one admitted Telos node and records operational state/receipts in AxE-owned durable state. tasks-app/task-cli may project and operate that state but do not become a competing completion authority.
+
+Source: [Coding agents most annoying things to fix](https://gist.github.com/vizanto/042a4e4702620c5c8dbbc15348901863).
+
+### 17A.1 Attempt lifecycle
+
+The minimum deterministic lifecycle is:
+
+1. **Create** — allocate an attempt/worktree for one admitted Telos node, with an immutable attempt ID and explicit effect scope.
+2. **Brief** — build the work order from `telos agent brief`, linked spec/source anchors and bounded code intelligence. Do not spend model turns rediscovering context that the graph/index already knows.
+3. **Red** — establish or select the failing test/check before implementation when the task is behavior-changing and testable.
+4. **Implement** — edit through the typed/structural path when supported; surface LSP, type and lint feedback immediately after each logical edit.
+5. **Green** — rerun the smallest authoritative Nx target(s) that prove the local change.
+6. **Mutation/adversarial check** — where the component supports it, prove the test/gate fails when the intended invariant is deliberately broken; otherwise record why this check is not applicable.
+7. **Refactor** — simplify only while the same deterministic gates remain green.
+8. **Rebase** — update onto the intended integration base before final acceptance. Conflict handling records ours/theirs/both plus type/symbol evidence; ambiguous semantic conflicts must not be silently guessed.
+9. **Full gate** — run the declared Nx lint/test/build/release subset for the affected graph plus independent review/verification. Free-form agent prose cannot mark the attempt complete.
+10. **Retro** — emit structured friction and improvement records: type friction, lint/gate friction, unnecessary context/tool calls, edit failures, flaky checks, repeated questions and simplification proposals. These feed the existing agent-ecosystem retrospective/Telos Registry workflow; they do not automatically weaken policy.
+
+Every transition is reducer-driven and idempotent. A process crash or repeated delivery resumes from the last durable receipt rather than from chat history.
+
+### 17A.2 Nx is the execution API, not a suggestion
+
+Agents must not choose `bun test`, ad-hoc package scripts or partial shell commands when the repository declares the equivalent Nx target. Add one programmatic **Nx Op** using Nx Devkit/programmatic APIs and expose it to hts/coordinator callers. It returns structured run/task identity, state, timing, cache/result metadata and an output reference; individual task output remains fetchable after the run.
+
+The operation must preserve the project graph and affected/dependency semantics. Infrastructure failure, tool bootstrap failure, source failure and policy failure are distinct result classes. The coordinator may choose a smaller valid target set for the inner red/green loop, but the final gate is declared by repository policy, not invented by the model.
+
+Tracked implementation: **HYP-1510**.
+
+### 17A.3 Questions are typed state, not conversational control flow
+
+Each agent question gets a durable question ID bound to the attempt and Telos node. A deterministic reducer classifies the next action:
+
+- **answer now** from reducer/Telos/session context when the answer is already authoritative;
+- **queue** when the information is useful but should not interrupt the current tool/model turn;
+- **interrupt** only for genuine human authority, missing product intent, credentials/effect approval or unresolved ambiguity.
+
+A model or semantic judge may help rank/retrieve context, but cannot grant privileged authority. Replies are idempotent by question ID and can arrive through tg/harness adapters without depending on tmux identity. The same protocol covers task updates that should be queued until a turn boundary.
+
+Tracked implementation: **HYP-1511**.
+
+### 17A.4 Context and edits use code structure before model tokens
+
+Context gathering prefers Telos source links, code/symbol indexes and typed graph queries over repeated file-reading tool calls. HTML/spec surfaces should visualize the types, events and messages that define the attempt boundary so the human and agent can inspect the same contract.
+
+For supported changes, hts exposes AST/symbol/type-graph operations, bulk-edit detection and immediate LSP/lint/type diagnostics. Range/text editing remains a fallback, not the default for mechanically structured edits. A fast model may repair a mechanical edit/tool failure, but cannot bypass a failed semantic/type/build gate.
+
+Tracked implementation: **HYP-1512**.
+
+### 17A.5 Semantic judges stay bounded
+
+TypeSafe/Jev-like decisions are useful for semantic linting, code-quality/performance heuristics, question/context classification and shadow real-time review between expensive model calls. They remain advisory until a separately measured promotion decision. They cannot approve commits, privileged effects, acceptance criteria or release readiness.
+
+Rules supplied to semantic linting should be versioned and attributable (for example performance-handbook rules). Results record the exact artifact/context/model/rule version and support abstention. Error-rate reduction or fine-tuning is evaluated on held-out local examples rather than vendor demonstrations.
+
+### 17A.6 Split work and route models/accounts from measured state
+
+The coordinator should detect independent failing tasks and split them instead of serializing them onto one agent. It can use estimated token/tool budget, provider/account availability, recent error classes and measured throughput to choose an execution lane. High-throughput/low-latency models are preferred for mechanical or well-bounded work; difficult semantic work escalates deliberately.
+
+Running out of one model/account is an explicit routing event, not a reason to abandon the attempt. Retry, split and escalation budgets are bounded and visible. Parallel agents may not write the same contended artifact unless the coordinator establishes a single-writer/merge protocol.
+
+### 17A.7 Pilot on AxE/Conloca release work
+
+This work must not displace the current business priority. The first connected evaluation uses one bounded AxE/Conloca release task after the required primitives are ready, rather than a new demo product. Measure human interruptions, free-form chat turns, repeated requirements, stale/failed attempts, edit/tool failures, Nx task failures, orchestration overhead, model/tool wait and time to verified result. Compare against the current workflow and publish an expand/revise/stop decision.
+
+Tracked implementation: **HYP-1509** (coordinator), **HYP-1513** (pilot). The broader coding-agent PRD remains **HYP-23**; **HYP-858** remains the existing ecosystem-retrospective stream and is reused rather than duplicated.
+
 ## 18. Milestones and implementation ownership
 
 | Milestone | Deliverable and exit gate | Primary owners |
