@@ -22,7 +22,7 @@ test = ["pytest"]
 pm = "pmlib.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/alex-mextner/pm-cli"
+Homepage = "https://git.hyperide.ai/ultrabricks/pm-cli"
 
 # Explicit package list (NOT flat-layout autodiscovery). commands/ is a SUBpackage of pmlib.
 [tool.setuptools.packages.find]
