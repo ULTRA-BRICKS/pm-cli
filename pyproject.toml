@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hyper-pm"
-version = "0.4.0"
+version = "0.5.0"
 description = "pm — autonomous project-manager coordinator: an event-sourced work queue over the task/tg/rig ecosystem (agent-tools research #255)."
 readme = "README.md"
 requires-python = ">=3.11"
