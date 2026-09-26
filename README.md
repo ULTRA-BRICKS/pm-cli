@@ -10,6 +10,29 @@ on it. The full design is agent-tools **research #255**.
 **Release 1 is an "organ of sight"**: it observes and reconciles; it does not autonomously
 dispatch or edit code.
 
+## Install
+
+Pick one — each ends with `pm` on your PATH:
+
+```bash
+# 1. uv — recommended; macOS, Linux and Windows (incl. Cygwin / Git Bash)
+uv tool install hyper-pm
+
+# 2. pipx
+pipx install hyper-pm
+
+# 3. from a clone — to hack on it; `git pull` updates the installed tool
+git clone https://git.hyperide.ai/ultrabricks/pm-cli && cd pm-cli && uv tool install --editable .
+```
+
+- **Unreleased `main`:** `uv tool install git+https://git.hyperide.ai/ultrabricks/pm-cli` (or the same with `pipx install`).
+- **Update:** `uv tool upgrade hyper-pm` · `pipx upgrade hyper-pm` · `git pull`.
+- **Installed before the rename** (as `pm-cli`, from git)? Remove that first — `uv tool uninstall pm-cli` or `pipx uninstall pm-cli` — or two installs both claim `pm`.
+- **Windows:** use uv (option 1). If a command dies with `UnicodeEncodeError` in mintty, run `setx PYTHONUTF8 1` once. More: [rig-cli → Windows](https://git.hyperide.ai/ultrabricks/rig-cli#windows-cygwin-git-bash-powershell).
+
+> **On PyPI as `hyper-pm`** (the command is still `pm`). The canonical repo is
+> **git.hyperide.ai/ultrabricks/pm-cli**; `github.com/alex-mextner/pm-cli` is a frozen, archived mirror.
+
 ## The invariant
 
 The work queue is a **deterministic projection of an append-only JSONL event log**. State is
