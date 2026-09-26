@@ -15,6 +15,8 @@
 # RIG_HATCH_REQUEST_WORKTREE_ONLY_WRITES / RIG_HATCH_REQUEST_PIN_PRIMARY_WORKTREE hatches for a
 # deliberate one-off bypass. Widening this repo's rig scope any FURTHER beyond CI + this one
 # hook key is still a separate decision, not a side effect of unblocking a merge.
+# The `task:` block at the end is that kind of separate decision: it routes this repo's tickets
+# to its own native Forgejo issues (the ecosystem-wide Forgejo cutover, UB-3, 2026-09-22).
 #
 # Items chosen for a small personal Python CLI (stdlib-only runtime, pytest + ruff, no
 # project dependencies):
@@ -39,3 +41,10 @@ ci:
   items:
     tests:       { enabled: true, tier: block }
     secret-scan: { enabled: true, tier: block }
+
+task:
+  backend: forgejo
+  forgejo:
+    url: https://git.hyperide.ai
+    repo: ultrabricks/pm-cli
+    attachment_mode: native
