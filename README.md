@@ -27,6 +27,7 @@ git clone https://git.hyperide.ai/ultrabricks/pm-cli && cd pm-cli && uv tool ins
 
 - **Unreleased `main`:** `uv tool install git+https://git.hyperide.ai/ultrabricks/pm-cli` (or the same with `pipx install`).
 - **Update:** `uv tool upgrade hyper-pm` · `pipx upgrade hyper-pm` · `git pull`.
+- **Installed before the rename** (as `pm-cli`, from git)? Remove that first — `uv tool uninstall pm-cli` or `pipx uninstall pm-cli` — or two installs both claim `pm`.
 - **Windows:** use uv (option 1). If a command dies with `UnicodeEncodeError` in mintty, run `setx PYTHONUTF8 1` once. More: [rig-cli → Windows](https://git.hyperide.ai/ultrabricks/rig-cli#windows-cygwin-git-bash-powershell).
 
 > **On PyPI as `hyper-pm`** (the command is still `pm`). The canonical repo is
