@@ -31,6 +31,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from ..events import EventKind, new_event
+from .forgejo import parse_forgejo_pr_url
 
 if TYPE_CHECKING:  # annotation-only imports (kept off the runtime import surface)
     from ..events import Event
@@ -45,6 +46,8 @@ if TYPE_CHECKING:  # annotation-only imports (kept off the runtime import surfac
 # so far are query/fragment-free, but rejecting one silently would regress a single item straight
 # back to `scanned:0`, exactly the failure mode this whole feature exists to close.
 _GH_PR_URL_RE = re.compile(r"^(https://github\.com/[^/\s]+/[^/\s]+/pull/\d+)/?(?:[?#].*)?$")
+# A Forgejo PR link (``https://git.hyperide.ai/<owner>/<repo>/pulls/<N>``) is recognized by
+# ``adapters/forgejo.py`` (same anchoring and query/fragment stripping, known hosts only).
 
 # The source name for this adapter (used as the intake ``source`` tag and the CLI ``--source``).
 SOURCE = "task"
@@ -162,7 +165,8 @@ def fetch_task_records(cwd: str = "") -> list[dict]:
 
 
 def extract_pr_url(attachments: Iterable[object]) -> str:
-    """The first GitHub pull-request URL among a ticket's ``attachments``, or "" if none.
+    """The first pull-request URL (GitHub ``/pull/N`` or Forgejo ``/pulls/N``) among a ticket's
+    ``attachments``, or "" if none.
 
     ``task list --json`` (what ``fetch_task_records`` calls for bulk ingest) omits
     ``attachments`` entirely — verified against task-cli's actual output shapes (2026-08-18):
@@ -181,6 +185,9 @@ def extract_pr_url(attachments: Iterable[object]) -> str:
         m = _GH_PR_URL_RE.match(url)
         if m:
             return m.group(1)  # the canonical PR url, with any query/fragment tail stripped
+        forgejo = parse_forgejo_pr_url(url)
+        if forgejo:
+            return forgejo[0]
     return ""
 
 

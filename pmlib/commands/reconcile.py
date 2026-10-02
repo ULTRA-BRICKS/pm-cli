@@ -112,7 +112,7 @@ def _discover_pr_urls(items: dict[str, WorkItem], repo_dir: str) -> dict[str, st
     """PR urls found via ``task read`` for items that don't already carry ``pr`` evidence.
 
     See the module docstring's "PR-URL DISCOVERY" section for why this exists. Best-effort: a
-    ticket that can't be read, or carries no GitHub PR attachment, is simply skipped — it stays
+    ticket that can't be read, or carries no GitHub or Forgejo PR attachment, is simply skipped — it stays
     unresolved for this run rather than failing the whole reconcile.
 
     Tries EVERY ``task_ref`` on the item, not just the first — an item can aggregate more than

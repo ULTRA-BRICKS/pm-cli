@@ -4,12 +4,16 @@
 ``parse_pr_facts`` (PURE) turns ``gh pr view --json state,statusCheckRollup`` output into a
 reconcile fact. ``fetch_pr_facts`` (EFFECTFUL) shells out to ``gh`` for every item with a PR.
 GitHub is the authority: a PR's merge state and CI conclusion are facts the PM agent cannot forge.
+A Forgejo PR url (``/pulls/N`` on a known Forgejo host) is read through ``adapters/forgejo.py``
+instead, since ``gh`` cannot see it; the fact has the same shape.
 """
 
 from __future__ import annotations
 
 import json
 from typing import TYPE_CHECKING
+
+from .forgejo import fetch_forgejo_pr, is_forgejo_pr_url
 
 if TYPE_CHECKING:  # annotation-only
     from ..model import WorkItem
@@ -56,7 +60,8 @@ def _ci_conclusion(rollup: object) -> str:
 def fetch_pr_facts(
     items: dict[str, WorkItem], discovered_urls: dict[str, str] | None = None
 ) -> dict[str, dict]:
-    """Shell out to ``gh pr view`` for every item that tracks a PR. Effectful and lazy.
+    """Shell out to ``gh pr view`` (or read the Forgejo API for a Forgejo PR url) for every item
+    that tracks a PR. Effectful and lazy.
 
     ``discovered_urls`` is an optional ``{item_id: pr_url}`` fallback for items with no recorded
     ``pr`` evidence yet — used by ``commands/reconcile.py`` to feed in PR urls freshly found via
@@ -79,7 +84,9 @@ def fetch_pr_facts(
         if not pr_url:
             continue
         if pr_url not in by_url:
-            by_url[pr_url] = _fetch_one_pr(pr_url)
+            by_url[pr_url] = (
+                fetch_forgejo_pr(pr_url) if is_forgejo_pr_url(pr_url) else _fetch_one_pr(pr_url)
+            )
         fact = by_url[pr_url]
         if fact is not None:
             facts[item_id] = dict(fact)  # a copy — never the same object shared across items
