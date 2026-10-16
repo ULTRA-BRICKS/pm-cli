@@ -13,4 +13,27 @@ convention) — the store is JSONL over stdlib ``json``.
 
 from __future__ import annotations
 
-__version__ = "0.5.0"
+import importlib.metadata
+import tomllib
+from pathlib import Path
+
+
+def _get_version() -> str:
+    """Resolve pm's version from its checkout first, then installed distribution metadata."""
+    try:
+        with (Path(__file__).resolve().parent.parent / "pyproject.toml").open("rb") as source:
+            project = tomllib.load(source).get("project", {})
+        if isinstance(project, dict) and project.get("name") == "hyper-pm":
+            declared = project.get("version")
+            if isinstance(declared, str) and declared:
+                return declared
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+
+    try:
+        return importlib.metadata.version("hyper-pm")
+    except importlib.metadata.PackageNotFoundError:
+        return "0.0.0+unknown"
+
+
+__version__ = _get_version()

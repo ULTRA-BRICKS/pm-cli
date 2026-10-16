@@ -66,8 +66,20 @@ pm sprint status <sprint_id> [--json]          # progress, joined live against w
 pm sprint close <sprint_id>
 pm sprint retro <sprint_id> [--note <text>] [--json]   # record a note, or view with no --note
 pm sprint list [--json]
+pm chatgpt [--workspace home|glide.vc] [--state <db>] [status]  # observe existing Guardian
 pm doctor                                      # store writability + FSM integrity
 pm version
+```
+
+ChatGPT Guardian controls: [command reference](docs/commands/chatgpt.md).
+Select the account before the action; the default is `home`:
+
+```sh
+pm chatgpt --workspace home status
+pm chatgpt --workspace glide.vc status
+pm chatgpt --workspace glide.vc watch https://chatgpt.com/c/example --apply
+pm chatgpt --workspace glide.vc stop --chat '*' --apply
+pm chatgpt --workspace glide.vc resume --chat '*' --apply
 ```
 
 ## Sprints (Milestone 4)
