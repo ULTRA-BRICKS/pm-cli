@@ -11,21 +11,19 @@ Non-follow journal pipes belong to pm so a stalled reader cannot hold caller out
 from __future__ import annotations
 
 import argparse
-import re
 import subprocess
 import sys
 
+from ..chatgpt_monitor import ACCOUNTS, CHAT_URL, SERVICE_UNITS
+from ..chatgpt_monitor import configure as configure_monitor
+
 NAME = "chatgpt"
-HELP = "Observe existing local ChatGPT Guardian status; controls require explicit --apply."
-SERVICE_UNITS = {
-    "home": "chatgpt-guardian-home.service",
-    "glide.vc": "chatgpt-guardian-glide.service",
-}
+HELP = "Observe local ChatGPT Guardian accounts; controls require explicit --apply."
 
 
 def _chat_url(value: str) -> str:
     """Match Guardian's permanent URL contract without importing its package."""
-    if re.fullmatch(r"https://chatgpt\.com/c/[A-Za-z0-9_-]+/?", value) is None:
+    if CHAT_URL.fullmatch(value) is None:
         raise argparse.ArgumentTypeError(
             "Use an exact permanent https://chatgpt.com/c/<id> URL "
             "(ASCII letters, digits, '_' or '-', optional trailing '/', no query or fragment)."
@@ -51,32 +49,58 @@ def configure(parser: argparse.ArgumentParser) -> None:
     parser.allow_abbrev = False
     parser.add_argument(
         "--workspace",
-        choices=("home", "glide.vc"),
-        default="home",
-        help="Guardian account scope for status and controls (default: home).",
+        choices=(*ACCOUNTS, "all"),
+        default=None,
+        help="Guardian account scope (default: home; the interactive TUI defaults to all). "
+        "'all' is accepted only by monitor, tui and accounts.",
     )
     parser.add_argument("--state", help="Shared Guardian database (otherwise Guardian's default).")
     subs = parser.add_subparsers(dest="guardian_action")
+    accounts = subs.add_parser(
+        "accounts",
+        help="List supported accounts, whether configured, and observed counts.",
+        allow_abbrev=False,
+    )
+    accounts.add_argument(
+        "--json", dest="accounts_json", action="store_true", help="One read-only JSON report"
+    )
+    for name in ("monitor", "tui"):
+        monitor = subs.add_parser(
+            name, help="Session progress monitor (TUI has confirmed actions)", allow_abbrev=False
+        )
+        configure_monitor(monitor)
     subs.add_parser("status", help="Observe status; no recovery sends.", allow_abbrev=False)
     logs = subs.add_parser(
-        "logs", help="Read the fixed workspace user-service journal.", allow_abbrev=False,
+        "logs",
+        help="Read the fixed workspace user-service journal.",
+        allow_abbrev=False,
     )
-    logs.add_argument("--lines", type=_log_lines, default=50,
-                      help="Initial journal entries, 1 to 500 (default: 50).")
+    logs.add_argument(
+        "--lines",
+        type=_log_lines,
+        default=50,
+        help="Initial journal entries, 1 to 500 (default: 50).",
+    )
     logs.add_argument("--follow", action="store_true", help="Stream entries until interrupted.")
     service = subs.add_parser(
-        "service", help="Observe or control the installed systemd user service.",
+        "service",
+        help="Observe or control the installed systemd user service.",
         description="Default: read-only status. Service changes require --apply; "
-        "installation and recovery policy remain owned by Guardian.", allow_abbrev=False,
+        "installation and recovery policy remain owned by Guardian.",
+        allow_abbrev=False,
     )
     service_subs = service.add_subparsers(dest="service_action")
     service_subs.add_parser("status", help="Observe service state (default).", allow_abbrev=False)
     for action in ("start", "stop", "restart"):
         cp = service_subs.add_parser(
-            action, help="Request a service change with --apply.", allow_abbrev=False,
+            action,
+            help="Request a service change with --apply.",
+            allow_abbrev=False,
         )
         cp.add_argument(
-            "--apply", action="store_true", required=True,
+            "--apply",
+            action="store_true",
+            required=True,
             help="Authorize this systemd user service lifecycle change.",
         )
     for action in ("watch", "unwatch", "sol-opt-in", "sol-opt-out", "stop", "resume"):
@@ -85,13 +109,16 @@ def configure(parser: argparse.ArgumentParser) -> None:
         )
         if action in ("stop", "resume"):
             cp.add_argument(
-                "--chat", required=True, type=_chat_target,
-                help="Exact permanent https://chatgpt.com/c/<id> URL, or '*' for all."
+                "--chat",
+                required=True,
+                type=_chat_target,
+                help="Exact permanent https://chatgpt.com/c/<id> URL, or '*' for all.",
             )
         else:
             cp.add_argument(
-                "chat", type=_chat_url,
-                help="Exact permanent https://chatgpt.com/c/<id> URL; no query or fragment."
+                "chat",
+                type=_chat_url,
+                help="Exact permanent https://chatgpt.com/c/<id> URL; no query or fragment.",
             )
         cp.add_argument(
             "--apply",
@@ -104,11 +131,16 @@ def configure(parser: argparse.ArgumentParser) -> None:
 def _systemctl(command: list[str]) -> tuple[int, str]:
     try:
         process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True,
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
         output, _ = process.communicate(timeout=10)
     except FileNotFoundError:
-        print("error: systemctl is unavailable; a systemd user manager is required.", file=sys.stderr)
+        print(
+            "error: systemctl is unavailable; a systemd user manager is required.", file=sys.stderr
+        )
         return 127, ""
     except subprocess.TimeoutExpired:
         print(
@@ -118,8 +150,10 @@ def _systemctl(command: list[str]) -> tuple[int, str]:
         )
         return 124, ""
     except OSError:
-        print("error: cannot execute systemctl; check its installation and permissions.",
-              file=sys.stderr)
+        print(
+            "error: cannot execute systemctl; check its installation and permissions.",
+            file=sys.stderr,
+        )
         return 126, ""
     code = process.returncode
     if code:
@@ -134,8 +168,10 @@ def _systemctl(command: list[str]) -> tuple[int, str]:
 
 def _service(args: argparse.Namespace) -> int:
     if args.state is not None:
-        print("error: --state does not configure an installed service; omit it for service controls.",
-              file=sys.stderr)
+        print(
+            "error: --state does not configure an installed service; omit it for service controls.",
+            file=sys.stderr,
+        )
         return 2
     unit = SERVICE_UNITS[args.workspace]
     action = args.service_action or "status"
@@ -144,39 +180,91 @@ def _service(args: argparse.Namespace) -> int:
         if code:
             return code
         print(f"{unit}: {action} request accepted; observing service state.")
-    code, output = _systemctl([
-        "systemctl", "--user", "--no-pager", "show", unit,
-        "--property=LoadState", "--property=ActiveState", "--property=SubState", "--property=Job",
-    ])
+    code, output = _systemctl(
+        [
+            "systemctl",
+            "--user",
+            "--no-pager",
+            "show",
+            unit,
+            "--property=LoadState",
+            "--property=ActiveState",
+            "--property=SubState",
+            "--property=Job",
+        ]
+    )
     if code:
         return code
     properties = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
     load = properties.get("LoadState")
     if load == "not-found":
-        print(f"error: {unit} is not installed; deployment must install it separately.",
-              file=sys.stderr)
+        print(
+            f"error: {unit} is not installed; deployment must install it separately.",
+            file=sys.stderr,
+        )
         return 4
     active, sub = properties.get("ActiveState"), properties.get("SubState")
     job = properties.get("Job", "missing").split(" ", 1)[0]
-    if (load not in {"loaded", "masked", "error", "bad-setting", "merged", "stub"}
-            or active not in {"active", "reloading", "inactive", "failed", "activating",
-                              "deactivating", "maintenance", "refreshing"}
-            or sub not in {"running", "dead", "exited", "failed", "start", "start-pre",
-                           "start-post", "auto-restart", "auto-restart-queued", "stop",
-                           "stop-sigterm", "stop-sigkill", "stop-post", "final-sigterm",
-                           "final-sigkill", "reload", "reload-signal", "reload-notify",
-                           "condition", "clean", "cleaning", "abandoned", "stop-watchdog",
-                           "final-watchdog", "dead-before-auto-restart",
-                           "failed-before-auto-restart", "dead-resources-pinned"}
-            or (job and not job.isascii()) or (job and not job.isdigit())):
-        print(f"error: {unit}: unrecognized systemctl state; service state is unconfirmed.",
-              file=sys.stderr)
+    if (
+        load not in {"loaded", "masked", "error", "bad-setting", "merged", "stub"}
+        or active
+        not in {
+            "active",
+            "reloading",
+            "inactive",
+            "failed",
+            "activating",
+            "deactivating",
+            "maintenance",
+            "refreshing",
+        }
+        or sub
+        not in {
+            "running",
+            "dead",
+            "exited",
+            "failed",
+            "start",
+            "start-pre",
+            "start-post",
+            "auto-restart",
+            "auto-restart-queued",
+            "stop",
+            "stop-sigterm",
+            "stop-sigkill",
+            "stop-post",
+            "final-sigterm",
+            "final-sigkill",
+            "reload",
+            "reload-signal",
+            "reload-notify",
+            "condition",
+            "clean",
+            "cleaning",
+            "abandoned",
+            "stop-watchdog",
+            "final-watchdog",
+            "dead-before-auto-restart",
+            "failed-before-auto-restart",
+            "dead-resources-pinned",
+        }
+        or (job and not job.isascii())
+        or (job and not job.isdigit())
+    ):
+        print(
+            f"error: {unit}: unrecognized systemctl state; service state is unconfirmed.",
+            file=sys.stderr,
+        )
         return 1
     if load != "loaded" or active == "failed":
         print(f"{unit}: {load}, {active}/{sub}; service failed or unavailable.")
         return 1
     pending = bool(job and int(job)) or active in {
-        "activating", "deactivating", "reloading", "refreshing", "maintenance",
+        "activating",
+        "deactivating",
+        "reloading",
+        "refreshing",
+        "maintenance",
     }
     if action != "status":
         target = "inactive" if action == "stop" else "active"
@@ -187,24 +275,39 @@ def _service(args: argparse.Namespace) -> int:
 
 def _logs(args: argparse.Namespace) -> int:
     if args.state is not None:
-        print("error: --state does not select a service journal; omit it for logs.", file=sys.stderr)
+        print(
+            "error: --state does not select a service journal; omit it for logs.", file=sys.stderr
+        )
         return 2
     command = [
-        "journalctl", "--user", "--unit", SERVICE_UNITS[args.workspace],
-        "--lines", str(args.lines), "--no-pager",
+        "journalctl",
+        "--user",
+        "--unit",
+        SERVICE_UNITS[args.workspace],
+        "--lines",
+        str(args.lines),
+        "--no-pager",
     ]
     if args.follow:
         command.append("--follow")
     try:
-        process = (subprocess.Popen(command) if args.follow else subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        ))
+        process = (
+            subprocess.Popen(command)
+            if args.follow
+            else subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+        )
     except FileNotFoundError:
         print("error: journalctl is unavailable; install systemd journal tools.", file=sys.stderr)
         return 127
     except OSError:
-        print("error: cannot execute journalctl; check its installation and permissions.",
-              file=sys.stderr)
+        print(
+            "error: cannot execute journalctl; check its installation and permissions.",
+            file=sys.stderr,
+        )
         return 126
     try:
         if args.follow:
@@ -224,8 +327,9 @@ def _logs(args: argparse.Namespace) -> int:
             process.wait(timeout=1)
         except (OSError, subprocess.TimeoutExpired, KeyboardInterrupt):
             pass
-        print("error: journalctl timed out; no client or service was force-killed.",
-              file=sys.stderr)
+        print(
+            "error: journalctl timed out; no client or service was force-killed.", file=sys.stderr
+        )
         return 124
     except KeyboardInterrupt:
         # Only the journal reader belongs to this invocation; the service keeps running.
@@ -241,11 +345,29 @@ def _logs(args: argparse.Namespace) -> int:
             process.stderr.close()
     code = code if code >= 0 else 128 - code
     if code:
-        print(f"error: journalctl failed (exit {code}); check user journal access.", file=sys.stderr)
+        print(
+            f"error: journalctl failed (exit {code}); check user journal access.", file=sys.stderr
+        )
     return code
 
 
 def run(args: argparse.Namespace) -> int:
+    if args.guardian_action in ("monitor", "tui"):
+        from ..chatgpt_monitor import run as run_monitor
+
+        return run_monitor(args)
+    if args.guardian_action == "accounts":
+        from ..chatgpt_monitor import run_accounts
+
+        return run_accounts(args)
+    if args.workspace == "all":
+        print(
+            "error: --workspace all is only for monitor, tui and accounts; "
+            "choose home or glide.vc for this command.",
+            file=sys.stderr,
+        )
+        return 2
+    args.workspace = args.workspace or "home"
     if args.guardian_action == "logs":
         return _logs(args)
     if args.guardian_action == "service":
