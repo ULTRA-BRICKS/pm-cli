@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import os
 import re
+import selectors
+import signal
 import subprocess
 import sys
+import time
 
 REQUIRED = (
     "workspace",
@@ -21,6 +25,9 @@ REQUIRED = (
     "sessions",
 )
 COUNTS = ("enrolled", "present", "running", "blocked", "sent_24h", "resumed_24h", "completed_24h")
+EVENT_TEXT_LIMITS = {"kind": 128, "chat": 2048, "id": 128}
+MAX_CAPTURE_BYTES = 1048576  # per stream; Guardian snapshots are far smaller
+REAP_GRACE_SECONDS = 0.5  # exit-status wait after complete output, even past the deadline
 ACCOUNTS = ("home", "glide.vc")
 SERVICE_UNITS = {
     "home": "chatgpt-guardian-home.service",
@@ -34,6 +41,19 @@ class MonitorError(ValueError):
     def __init__(self, message, code=1):
         super().__init__(message)
         self.code = code
+
+
+def _validate_event(event):
+    """Bound the identity/timing fields the Events pane renders; service events omit ``chat``."""
+    for key, limit in EVENT_TEXT_LIMITS.items():
+        value = event.get(key, "")
+        if not isinstance(value, str) or len(value) > limit:
+            raise MonitorError(f"Guardian event {key} is invalid")
+    at = event.get("at")
+    if at is not None and (type(at) not in (int, float) or not math.isfinite(at)):
+        raise MonitorError("Guardian event timestamp is invalid")
+    if "baseline" in event and type(event["baseline"]) is not bool:
+        raise MonitorError("Guardian event baseline flag is invalid")
 
 
 def validate_snapshot(data, workspace):
@@ -54,10 +74,11 @@ def validate_snapshot(data, workspace):
         raise MonitorError("Guardian summary counters are missing or invalid")
     if any(not isinstance(s.get("chat"), str) for s in data["sessions"]):
         raise MonitorError("Guardian session identity is missing")
-    if not isinstance(data.get("events", []), list) or any(
-        not isinstance(e, dict) for e in data.get("events", [])
-    ):
+    events = data.get("events", [])
+    if not isinstance(events, list) or any(not isinstance(e, dict) for e in events):
         raise MonitorError("Guardian events must be a list of objects")
+    for event in events:
+        _validate_event(event)
     for key in ("generated_at", "heartbeat_at"):
         value = data[key]
         if value is not None and (type(value) not in (int, float) or not math.isfinite(value)):
@@ -82,18 +103,75 @@ def validate_snapshot(data, workspace):
     return data
 
 
+def _bounded_run(command, timeout):
+    """Run ``command`` without a shell; return ``(returncode, stdout, stderr)`` as bytes.
+
+    Both pipes are drained incrementally and each is capped at ``MAX_CAPTURE_BYTES``. The reader
+    runs in its own session so that hitting a cap or the shared deadline can SIGKILL exactly the
+    reader's process group (the reader and anything it spawned that still holds the pipes) and
+    reap the reader; nothing beyond the cap is buffered. Descendants that stay in that group do not
+    outlive the call; one that deliberately starts its own session is out of scope.
+    """
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        start_new_session=True,
+    )
+    finished = False
+    try:
+        deadline = time.monotonic() + timeout
+        names = {process.stdout.fileno(): "stdout", process.stderr.fileno(): "stderr"}
+        chunks = {"stdout": [], "stderr": []}
+        sizes = {"stdout": 0, "stderr": 0}
+        with selectors.DefaultSelector() as selector:
+            for stream in (process.stdout, process.stderr):
+                selector.register(stream, selectors.EVENT_READ)
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(command, timeout)
+                for key, _ in selector.select(remaining):
+                    name = names[key.fd]
+                    # Read at most one byte past the cap: overflow is detected, never buffered.
+                    data = os.read(key.fd, min(65536, MAX_CAPTURE_BYTES + 1 - sizes[name]))
+                    if not data:
+                        selector.unregister(key.fileobj)
+                        continue
+                    sizes[name] += len(data)
+                    if sizes[name] > MAX_CAPTURE_BYTES:
+                        raise MonitorError(f"Guardian {name} exceeds {MAX_CAPTURE_BYTES} bytes")
+                    chunks[name].append(data)
+        # Output is complete; only the exit status is outstanding, so allow a short reap even if
+        # the deadline landed exactly on the final EOF.
+        process.wait(timeout=max(deadline - time.monotonic(), REAP_GRACE_SECONDS))
+        finished = True
+        return process.returncode, b"".join(chunks["stdout"]), b"".join(chunks["stderr"])
+    finally:
+        if not finished:
+            # The unreaped leader keeps the group id reserved, so this cannot hit another process.
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+        process.wait()
+        process.stdout.close()
+        process.stderr.close()
+
+
 def fetch_snapshot(workspace, state=None):
     command = ["chatgpt-guardian", "--workspace", workspace]
     if state is not None:
         command.append(f"--state={state}")
     command += ["monitor", "--json"]
+    if not hasattr(os, "killpg"):
+        # The bounded reader relies on POSIX pipes in selectors and process groups; the Guardian
+        # services it observes are Linux systemd units, so refuse cleanly elsewhere.
+        raise MonitorError("Guardian snapshot reading requires a POSIX host")
     try:
         timeout = float(os.environ.get("PMLIB_MONITOR_TIMEOUT", "10"))
         if not math.isfinite(timeout) or not 0.1 <= timeout <= 30:
             raise ValueError("Monitor timeout must be 0.1 to 30 seconds")
-        result = subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout, check=False
-        )
+        returncode, stdout, stderr = _bounded_run(command, timeout)
     except FileNotFoundError:
         raise MonitorError(
             "chatgpt-guardian unavailable; install it in the pm environment", 127
@@ -102,15 +180,14 @@ def fetch_snapshot(workspace, state=None):
         raise MonitorError("Snapshot read timed out; service state is unconfirmed") from None
     except OSError as exc:
         raise MonitorError("Cannot read Guardian snapshot: " + type(exc).__name__) from exc
-    if len(result.stdout.encode()) > 1048576:
-        raise MonitorError("Guardian snapshot exceeds 1 MiB")
-    if result.returncode:
-        if result.returncode == 2 and "invalid choice" in result.stderr:
+    if returncode:
+        text = stderr.decode("utf-8", "replace")
+        if returncode == 2 and "invalid choice" in text:
             raise MonitorError("Update chatgpt-guardian: monitor command is not installed")
-        raise MonitorError("Guardian snapshot unavailable: " + result.stderr.strip()[:500])
+        raise MonitorError("Guardian snapshot unavailable: " + text.strip()[:500])
     try:
-        return validate_snapshot(json.loads(result.stdout), workspace)
-    except (ValueError, TypeError) as exc:
+        return validate_snapshot(json.loads(stdout.decode("utf-8")), workspace)
+    except (ValueError, TypeError, RecursionError, OverflowError) as exc:
         raise MonitorError("Invalid Guardian snapshot: " + str(exc)) from exc
 
 

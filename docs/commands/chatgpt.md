@@ -170,6 +170,22 @@ labelled `[account]`; `monitor --json --workspace all` returns
 v1 snapshots stay unchanged; exit 1 only if no account could be read). The same chat ID in
 two accounts is two distinct targets: an action always carries the row's own account.
 
+Reading a snapshot runs `chatgpt-guardian ... monitor --json` without a shell, with stdin
+closed, in its own process group. Stdout and stderr are each read incrementally and capped at
+1 MiB; exceeding a cap, or the read timeout (`PMLIB_MONITOR_TIMEOUT`, default 10 s), kills the
+reader's process group (descendants that stay in it die with it; one that deliberately starts
+its own session is not tracked), reaps the reader and reports the account as unavailable (a
+complete snapshot whose exit status lags the deadline gets up to 0.5 s to finish). Event fields are
+all optional, but when present they must be well typed: text `kind`/`id` (at most 128
+characters), text `chat` (at most 2048; service-level events use `""` or omit it, `null` is
+rejected), a finite numeric `at` or `null`, and a boolean `baseline`. A snapshot with a
+malformed event is rejected as a whole. The Events pane shows `kind` only when it is a plain
+identifier, a chat only when it is a recognised permanent chat URL (its last path segment),
+`-` for service-level events, and a fixed `(unrecognized)` placeholder for anything else.
+Snapshot reading needs a POSIX host (selectors on pipes, process groups); elsewhere it reports
+`Guardian snapshot reading requires a POSIX host` instead of crashing. The Guardian services
+themselves are Linux systemd units.
+
 Navigation: Tab switches sessions/events; arrows or j/k select a row; Enter shows details;
 `/` searches; `f` cycles all/watched/problems; `A` focuses one account (all -> home ->
 glide.vc); `r` refreshes (always read-only); Space pauses only the **display** (the header

@@ -22,6 +22,9 @@ from zoneinfo import ZoneInfo
 
 from .chatgpt_monitor import ACCOUNTS, CHAT_URL
 
+EVENT_KIND = re.compile(r"[A-Za-z0-9_.:-]{1,128}")
+CHAT_LABEL_WIDTH = 12
+UNRECOGNIZED = "(unrecognized)"
 ZONE = ZoneInfo("Europe/Belgrade")
 ACTION_TIMEOUT = 45  # Guardian control waits up to 30 s; service start/stop up to 20 s.
 LABELS = {
@@ -438,6 +441,27 @@ def _modal(state, snapshot):
     return []
 
 
+def event_kind_label(kind):
+    """Event kind as a plain identifier; free text could imitate another column or account."""
+    if isinstance(kind, str) and EVENT_KIND.fullmatch(kind):
+        return kind
+    return "" if kind == "" else UNRECOGNIZED
+
+
+def event_chat_label(chat):
+    """Short chat id for the Events pane; only a recognised chat URL is ever echoed.
+
+    Service-level events carry an empty (or absent) chat; anything else (wrong type, hostile
+    text) is shown as a fixed placeholder so it can neither crash rendering nor imitate an
+    account label.
+    """
+    if chat == "":
+        return "-"
+    if isinstance(chat, str) and CHAT_URL.fullmatch(chat):
+        return chat.rstrip("/").rsplit("/", 1)[-1][:CHAT_LABEL_WIDTH]
+    return UNRECOGNIZED
+
+
 def render_lines(snapshot, state, width, height, now=None):
     now = time.time() if now is None else now
     snapshot = snapshot or {}
@@ -535,7 +559,7 @@ def render_lines(snapshot, state, width, height, now=None):
         for i, event in enumerate(rows[start : start + capacity], start):
             label = f"[{clean(event.get('account'))}] " if combined else ""
             lines.append(
-                f"{'>' if i == selected else ' '} {stamp(event.get('at'), True)} | {event.get('kind', '')} | {label}{event.get('chat', '').rsplit('/', 1)[-1][:12]} {'baseline' if event.get('baseline') else ''}"
+                f"{'>' if i == selected else ' '} {stamp(event.get('at'), True)} | {event_kind_label(event.get('kind', ''))} | {label}{event_chat_label(event.get('chat', ''))} {'baseline' if event.get('baseline') else ''}"
             )
     if not rows:
         lines.append("No matching rows")

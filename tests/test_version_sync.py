@@ -27,7 +27,7 @@ def test_distribution_name_is_the_pypi_one() -> None:
 
 
 def test_release_version() -> None:
-    assert PROJECT["version"] == "0.6.0"
+    assert PROJECT["version"] == "0.6.1"
 
 
 def test_source_version_wins_over_stale_install(tmp_path, monkeypatch) -> None:
@@ -42,7 +42,9 @@ def test_source_version_wins_over_stale_install(tmp_path, monkeypatch) -> None:
     assert runpy.run_path(str(init))["__version__"] == "8.7.6"
 
 
-@pytest.mark.parametrize("source", [None, '[project]\nname = "other"\nversion = "9.9.9"', "invalid["])
+@pytest.mark.parametrize(
+    "source", [None, '[project]\nname = "other"\nversion = "9.9.9"', "invalid["]
+)
 @pytest.mark.parametrize("installed", ["7.6.5", None])
 def test_installed_and_unknown_fallback(tmp_path, monkeypatch, source, installed) -> None:
     package = tmp_path / "pmlib"

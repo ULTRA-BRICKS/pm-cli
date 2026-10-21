@@ -492,3 +492,182 @@ raise SystemExit(run_tui(fetch, interval=1, act=act))
         os.close(master)
     assert calls.read_text().count("call") == 1
     assert b"Traceback" not in output
+
+
+# --- malformed event identity: never crash the Events pane, never spoof an account ---------
+
+
+def events_view(events, snapshot=None):
+    from pmlib.chatgpt_tui import ViewState, render_lines
+
+    snap = dict(snapshot or project(), events=events)
+    return "\n".join(render_lines(snap, ViewState(pane="events"), 160, 40, NOW))
+
+
+@pytest.mark.parametrize("chat", [None, 7, 1.5, True, ["x"], {"a": 1}])
+def test_validation_rejects_malformed_event_chat(chat):
+    from pmlib.chatgpt_monitor import MonitorError, validate_snapshot
+
+    event = {"kind": "continuation-running", "chat": chat, "at": NOW}
+    with pytest.raises(MonitorError, match="event"):
+        validate_snapshot(dict(project(), events=[event]), "glide.vc")
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"kind": None, "at": NOW},
+        {"kind": ["x"], "at": NOW},
+        {"kind": "k" * 129, "at": NOW},
+        {"kind": "k", "at": "now"},
+        {"kind": "k", "at": float("nan")},
+        {"kind": "k", "at": float("inf")},
+        {"kind": "k", "at": True},
+        {"kind": "k", "baseline": "yes"},
+        {"kind": "k", "id": 5},
+        {"kind": "k", "chat": CHAT + "a" * 2100},
+    ],
+)
+def test_validation_rejects_malformed_event_fields(event):
+    from pmlib.chatgpt_monitor import MonitorError, validate_snapshot
+
+    with pytest.raises(MonitorError, match="event"):
+        validate_snapshot(dict(project(), events=[event]), "glide.vc")
+
+
+@pytest.mark.parametrize(
+    "event",
+    [
+        {"kind": "service-restart", "at": NOW},
+        {"kind": "service-restart", "chat": "", "at": NOW, "baseline": False},
+        {"kind": "continuation-running", "chat": CHAT, "at": NOW, "baseline": True, "id": "a1"},
+        {"kind": "x", "at": None, "extra": {"nested": [1]}},
+    ],
+)
+def test_validation_keeps_service_level_and_normal_events(event):
+    from pmlib.chatgpt_monitor import validate_snapshot
+
+    assert validate_snapshot(dict(project(), events=[event]), "glide.vc")["events"] == [event]
+
+
+@pytest.mark.parametrize("chat", [None, 7, ["x"], {"a": 1}, b"bytes"])
+def test_events_pane_survives_unvalidated_malformed_chat(chat):
+    text = events_view([{"kind": "odd-event", "chat": chat, "at": NOW}])
+    assert "odd-event" in text
+
+
+def test_events_pane_service_level_event_without_chat():
+    text = events_view([{"kind": "service-restart", "at": NOW}, {"kind": "svc", "chat": ""}])
+    assert "service-restart" in text and "svc" in text
+
+
+def test_events_pane_shows_chat_tail_and_trailing_slash():
+    text = events_view([{"kind": "k1", "chat": "https://chatgpt.com/c/abc123/", "at": NOW}])
+    assert "abc123" in text
+
+
+def test_events_pane_chat_cannot_spoof_account_or_inject_controls():
+    from pmlib.chatgpt_monitor import combine
+
+    hostile = "https://chatgpt.com/c/ok\x1b[31m\x07] [home] ok\u202e"
+    snap = combine(
+        [("glide.vc", dict(project(), events=[{"kind": "k", "chat": hostile, "at": NOW}]), None)]
+    )
+    text = events_view(snap["events"], snapshot=snap)
+    assert "[glide.vc]" in text
+    assert "[home]" not in text
+    assert "\x1b" not in text and "\x07" not in text and "\u202e" not in text
+
+
+@pytest.mark.parametrize(
+    "kind",
+    ["paused | [home] service stopped", "x\x1b[2Jy", "a\u202eb", "bell\x07", "k" * 500, None, 7],
+)
+def test_events_pane_kind_cannot_spoof_account_or_inject_controls(kind):
+    from pmlib.chatgpt_monitor import combine
+
+    snap = combine(
+        [("glide.vc", dict(project(), events=[{"kind": kind, "chat": CHAT, "at": NOW}]), None)]
+    )
+    text = events_view(snap["events"], snapshot=snap)
+    assert "[glide.vc]" in text and "[home]" not in text and "service stopped" not in text
+    assert not {"\x1b", "\x07", "\u202e"} & set(text)
+
+
+def test_events_pane_null_chat_is_malformed_not_service_level():
+    assert "(unrecognized)" in events_view([{"kind": "k", "chat": None, "at": NOW}])
+    assert "(unrecognized)" not in events_view(
+        [{"kind": "k", "at": NOW}, {"kind": "k", "chat": ""}]
+    )
+
+
+def test_combined_account_label_not_overridable_by_event():
+    from pmlib.chatgpt_monitor import combine
+
+    event = {"kind": "k", "chat": CHAT, "at": NOW, "account": "home"}
+    snap = combine([("glide.vc", dict(project(), events=[event]), None)])
+    assert snap["events"][0]["account"] == "glide.vc"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix PTY is unavailable on Windows")
+def test_real_terminal_events_view_with_malformed_and_service_events(tmp_path):
+    import fcntl
+    import select
+    import struct
+    import termios
+
+    root = os.path.dirname(os.path.dirname(__file__))
+    script = tmp_path / "pty_events.py"
+    script.write_text("""from pmlib.chatgpt_tui import run_tui
+now = __import__("time").time()
+snapshot={"workspace":"glide.vc","generated_at":now,"heartbeat_at":None,"stale":False,"connection":"connected","summary":{"enrolled":1,"present":1,"available":1,"running":0,"sent_24h":0,"resumed_24h":0,"completed_24h":0},"sessions":[{"chat":"https://chatgpt.com/c/abc","title":"Events proof","status":"complete","continuation":"completed","watched":True}],"events":[{"kind":"evt-null","chat":None,"at":now},{"kind":"evt-int","chat":7,"at":now},{"kind":"evt-service","at":now},{"kind":"evt-real","chat":"https://chatgpt.com/c/realchat","at":now}]}
+raise SystemExit(run_tui(lambda:snapshot,interval=2))
+""")
+    master, slave = os.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 32, 150, 0, 0))
+    env = dict(os.environ, TERM="xterm-256color", PYTHONPATH=root)
+    process = subprocess.Popen(
+        [sys.executable, str(script)],
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        env=env,
+        close_fds=True,
+    )
+    os.close(slave)
+    output = bytearray()
+
+    def drain(duration):
+        deadline = time.monotonic() + duration
+        while time.monotonic() < deadline:
+            if select.select([master], [], [], 0.05)[0]:
+                try:
+                    output.extend(os.read(master, 65536))
+                except OSError:
+                    break
+
+    def wait_for(needle, seconds):
+        deadline = time.monotonic() + seconds
+        while needle not in output and time.monotonic() < deadline and process.poll() is None:
+            drain(0.1)
+        return needle in output
+
+    try:
+        assert wait_for(b"Events proof", 5)
+        os.write(master, b"\t")
+        assert wait_for(b"evt-real", 3)
+        for needle in (b"evt-null", b"evt-int", b"evt-service", b"realchat"):
+            assert needle in output
+        os.write(master, b"jjj")
+        drain(0.3)
+        os.write(master, b"\n")
+        drain(0.3)
+        assert process.poll() is None
+        os.write(master, b"q")
+        assert process.wait(timeout=3) == 0
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=2)
+        os.close(master)
+    assert b"Traceback" not in output and b"AttributeError" not in output
