@@ -242,3 +242,113 @@ The header separates enrolled, present and available sessions. Available means d
 Dispatch acknowledgements and confirmed assistant continuation/completion have different counters. Confirmation requires correlated evidence from the following turn; an uncertain dispatch remains uncertain. Recorded observation times are not reconstructed execution times. Details include the actual last check, next deferred check, dispatch time/state, confirmation timestamps and source freshness, all displayed in Europe/Belgrade time. Optional `error_detail` and `session_stale` fields are shown in details when Guardian provides them.
 
 The TUI reads local telemetry only. The separate `chatgpt-guardian ... observer` process supplies that telemetry without restarting or controlling the existing recovery service. Missing data or a failed refresh retains the original source timestamp and is visibly marked unavailable/stale. Baseline historical events are not new notifications, and unchanged events retain stable IDs.
+
+## Owner-approved session control (API, approvals, MCP, connector)
+
+pm exposes one typed control API for ChatGPT Guardian sessions. Reads return telemetry and
+receipts. Every write only QUEUES an owner approval; nothing is sent or changed until the owner
+taps Approve on a Telegram card posted through the existing `tg-ctl ask --owner-only`. Before
+every ask PM probes the same trusted `tg-ctl` with `capabilities --json` and requires exit 0 and a
+bounded JSON object `{"schema_version":1,"capabilities":[...,"ask-owner-only-v1"]}`; anything
+else (old CLI, timeout, bad JSON, marker missing) fails closed: no ask is started, there is no
+plain-ask fallback, and the receipt is `delivery_unavailable`. PM always passes `--owner-only`
+and never an `approved` or sender argument, and owner discovery requires a positive (private
+chat) `TG_CHAT_ID`; group, negative or zero ids mean no owner is configured. Only a verified
+`tg-ctl ask` exit 0 with an `approved` line counts: free text, an `approved` flag, a sender or
+recipient argument, a URL or a command are refused (`forbidden_key`). Timeout, rejection, an
+unreachable daemon or an ambiguous delivery leave a durable non-success receipt and are never
+retried or re-sent automatically.
+
+### CLI (works without any service)
+
+```
+pm chatgpt api METHOD --params '{"...": "..."}'   # or --params - to read stdin (64 KiB max)
+```
+
+Stdout is always exactly one JSON envelope: `{"ok":true,"result":...}` or
+`{"ok":false,"error":{"code":"...","message":"..."}}` (exit 0 or 1). Error codes:
+`invalid_request invalid_params unknown_key forbidden_key unknown_method not_found
+account_unavailable refused busy unauthorized payload_too_large internal_error`.
+
+| Method | Params | Result |
+| --- | --- | --- |
+| `accounts.list` | `{}` | accounts report |
+| `sessions.list` | `{workspace?: all\|home\|glide.vc}` (default `all`) | `{workspace, accounts, sessions, events}` |
+| `sessions.get` | `{workspace: home\|glide.vc, chat}` | `{workspace, account: <health>, session: <row + latest_turn>}`; `latest_turn == turn` (the exact rendered turn) |
+| `actions.request` | `{workspace, action, chat?, expected_turn?, reason?}` | `{request_id, status, action, workspace, chat, expected_turn, expires_at, plan_digest, duplicate}` |
+| `requests.list` | `{}` | `{requests: [receipt]}` newest first |
+| `requests.get` | `{request_id}` | receipt with status, binding fields and timeline |
+| `connectors.list` | `{}` | `{connectors: [{connector, target, state, plan_digest, ...}]}` |
+| `connectors.request` | `{connector: "guardian", target: "chatgpt"}` | queued receipt plus `connector`, `target` |
+
+`chat` is a bare conversation id (`[A-Za-z0-9_-]`) or the exact `https://chatgpt.com/c/<id>` URL;
+it is normalized once to the canonical URL and anything else (other origins, query, fragment,
+whitespace, paths) is rejected. Actions: `watch unwatch pause resume continue` (need `chat`) and
+`service-start service-stop` (whole account, no `chat`). `expected_turn` applies to `continue`
+only and defaults to the currently observed turn. A duplicate of the same
+account/chat/turn/action returns the original receipt (`duplicate: true`); a rejected, expired or
+uncertain turn is never asked again.
+
+Request status: `queued`, `asked`, `asked_post_uncertain`, `approved`, `dispatching`, `dispatch_queued`, `sent`,
+`applied`, `refused`, `rejected`, `timed_out`, `expired`, `invalidated`, `uncertain`, `failed`,
+`delivery_unavailable`. A queued receipt is never a completed action.
+
+### Continuation policy
+
+A completed answer is not a completed task, so pm only ever asks. A continuation card is proposed
+per account/chat/turn when the chat is enrolled, present, observed currently (the per-session
+`session_stale`/`check_stale` flags and `last_checked_at` against its backoff, not just the
+snapshot age), non-generating (`complete` or `unknown`), free of recovery blockers, global stop,
+quota latch, unresolved send, draft, attachment and auth challenge, has no retracted completion,
+and has been quiet for 120 seconds. Running or working always vetoes, as does a contradictory
+completed-and-running row. A different or newer turn invalidates an older proposal, before the
+question and again right before dispatch. Existing `Thinking failed` recovery stays in Guardian.
+The passive monitor never verifies model or effort (`effort` is empty, the model is only visible
+trigger text), so neither gates the question and neither is guessed; Guardian verifies them
+after approval and refuses fail-closed. The Telegram card is Russian and names the account and
+chat, asks the action's own question, states the exact effect and expiry, and says that
+declining or ignoring changes nothing.
+
+### Worker and units
+
+```
+pm chatgpt approvals run [--once] [--interval 60] [--no-propose]
+pm chatgpt unit api|worker        # print a systemd user unit template (never installed by pm)
+```
+
+One worker holds a lock (exit 75 if another runs). `--once` runs one tick. Install the templates
+manually: `pm chatgpt unit worker > ~/.config/systemd/user/pm-chatgpt-approvals.service`, then
+`systemctl --user daemon-reload && systemctl --user enable --now pm-chatgpt-approvals.service`.
+
+### Optional loopback HTTP service
+
+```
+pm chatgpt api token-init [--rotate]   # creates <pm state>/chatgpt/api-token (0600); prints the path only
+pm chatgpt api serve --port 8792       # POST /v1/rpc with {"method": "...", "params": {...}}
+```
+
+Binds `127.0.0.1` only; every request (including `GET /v1/health`) needs
+`Authorization: Bearer <token>`; `Origin` headers and non-loopback `Host` are refused; bodies are
+capped at 64 KiB and connections at 8. Read the token yourself from the file when configuring a
+client; pm never prints it. Template: `pm chatgpt unit api`.
+
+### MCP server
+
+`pm chatgpt mcp` speaks MCP 2025-06-18 over stdio (newline-delimited JSON-RPC). Read tools:
+`chatgpt_accounts chatgpt_sessions chatgpt_session_get chatgpt_events chatgpt_requests
+chatgpt_request_get chatgpt_connectors`. Request-only tools: `chatgpt_request_continue
+chatgpt_request_control chatgpt_request_connector_install`. No tool approves or sends.
+
+A successful `tools/call` returns `structuredContent` = the unwrapped API `result` object and
+`content[0].text` = the JSON text of the full API envelope (`{"ok":true,"result":...}`); a failure
+sets `isError` and carries the error envelope in both. Tools declare no `outputSchema`.
+
+### Connector
+
+`connectors.request` queues an owner approval of the fixed, reviewed plan: a local launcher,
+manifest and onboarding note under `<pm state>/chatgpt/connectors/guardian-chatgpt/`. No
+downloads, no network listener, no credentials. After approval the state is `local_ready`, then
+`awaiting_platform_connection` once `pm chatgpt connector tunnel-id <tunnel_id>` records the
+non-secret tunnel id. It is never reported connected: ChatGPT workspace registration, OAuth and
+the platform risk warning are the owner's steps (`pm chatgpt connector` prints them), verified
+only by a real ChatGPT tool call.

@@ -71,7 +71,7 @@ pm doctor                                      # store writability + FSM integri
 pm version
 ```
 
-ChatGPT Guardian controls: [command reference](docs/commands/chatgpt.md).
+ChatGPT Guardian controls and the owner-approved session API/MCP/connector: [command reference](docs/commands/chatgpt.md).
 Select the account before the action; the default is `home`:
 
 ```sh

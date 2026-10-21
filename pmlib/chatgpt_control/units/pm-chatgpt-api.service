@@ -1,0 +1,26 @@
+# Template for the optional loopback control API. NOT installed by pm: copy it to
+# ~/.config/systemd/user/pm-chatgpt-api.service, run `pm chatgpt api token-init` once, then
+#   systemctl --user daemon-reload && systemctl --user enable --now pm-chatgpt-api.service
+# The token lives in a 0600 file under pm's state directory and is never printed or logged.
+[Unit]
+Description=pm ChatGPT control API (loopback, bearer-authenticated; requests only queue approvals)
+Documentation=https://git.hyperide.ai/ultrabricks/pm-cli
+
+[Service]
+Type=simple
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/pm chatgpt api serve --port 8792
+# SIGINT lets the server stop cleanly; exit 2 (no token / bad setup) is not retried.
+KillSignal=SIGINT
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=10
+RestartPreventExitStatus=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+
+[Install]
+WantedBy=default.target

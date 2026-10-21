@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hyper-pm"
-version = "0.6.1"
+version = "0.7.0"
 description = "pm — autonomous project-manager coordinator: an event-sourced work queue over the task/tg/rig ecosystem (agent-tools research #255)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,6 +27,9 @@ Homepage = "https://git.hyperide.ai/ultrabricks/pm-cli"
 # Explicit package list (NOT flat-layout autodiscovery). commands/ is a SUBpackage of pmlib.
 [tool.setuptools.packages.find]
 include = ["pmlib*"]
+
+[tool.setuptools.package-data]
+"pmlib.chatgpt_control" = ["units/*.service"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

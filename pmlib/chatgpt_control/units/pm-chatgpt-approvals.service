@@ -1,0 +1,28 @@
+# Template for the single owner-approval worker. NOT installed by pm: copy it to
+# ~/.config/systemd/user/pm-chatgpt-approvals.service, then
+#   systemctl --user daemon-reload && systemctl --user enable --now pm-chatgpt-approvals.service
+# It proposes at most one Telegram card per account/chat/turn (never for running or doubtful
+# chats), asks through the existing `tg-ctl ask`, and acts only on a verified owner approval.
+[Unit]
+Description=pm ChatGPT approval worker (owner-approved continuations and controls)
+Documentation=https://git.hyperide.ai/ultrabricks/pm-cli
+
+[Service]
+Type=simple
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=%h/.local/bin/pm chatgpt approvals run --interval 60
+# SIGINT makes the worker record an in-flight wait as uncertain (never replayed) before exit;
+# tg-ctl is given its grace period to withdraw an open card.
+KillSignal=SIGINT
+TimeoutStopSec=45
+Restart=on-failure
+RestartSec=30
+# Exit 75: another worker already holds the lock; do not loop.
+RestartPreventExitStatus=75
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+UMask=0077
+
+[Install]
+WantedBy=default.target

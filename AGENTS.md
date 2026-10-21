@@ -73,6 +73,11 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
   telegram.py` captures inbound Telegram messages (`tg replies user --json`) into the DLQ. Each is
   a PURE plan/capture split from an effectful `fetch_*` shell-out. No tg-cli/task-cli change needed
   — pm consumes their existing `--json` streams read-only.
+- `pmlib/chatgpt_control/*` — the owner-approved ChatGPT session control plane: one append-only
+  approval ledger + pure projection, a single `api.dispatch` behind the CLI/HTTP/MCP front ends
+  (writes only QUEUE requests), the `tg-ctl ask --owner-only` approval worker (gated on
+  `tg-ctl capabilities --json` listing `ask-owner-only-v1`, fail closed), poller and fixed connector.
+  Stdlib-only; see `docs/commands/chatgpt.md`.
 - `pmlib/cli.py` + `pmlib/commands/*` — argparse dispatch + self-registering commands.
 
 ## Tests

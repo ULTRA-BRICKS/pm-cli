@@ -70,6 +70,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
         )
         configure_monitor(monitor)
     subs.add_parser("status", help="Observe status; no recovery sends.", allow_abbrev=False)
+    _configure_control(subs)
     logs = subs.add_parser(
         "logs",
         help="Read the fixed workspace user-service journal.",
@@ -126,6 +127,74 @@ def configure(parser: argparse.ArgumentParser) -> None:
             required=True,
             help="Authorize this control change; does not enable Guardian recovery sends.",
         )
+
+
+def _configure_control(subs) -> None:
+    """Owner-approval control plane: JSON API, HTTP service, MCP server, worker, connector."""
+    api = subs.add_parser(
+        "api",
+        help="Frozen JSON API: METHOD --params JSON (or 'serve', 'token-init').",
+        description="One JSON envelope on stdout. Methods: accounts.list sessions.list "
+        "sessions.get actions.request requests.list requests.get connectors.list "
+        "connectors.request. Writes only QUEUE an owner approval. 'serve' runs the optional "
+        "loopback authenticated HTTP service; 'token-init' creates its private token file.",
+        allow_abbrev=False,
+    )
+    api.add_argument("api_method", metavar="METHOD", help="API method, 'serve' or 'token-init'.")
+    api.add_argument(
+        "--params", default=None, help="JSON object (at most 64 KiB), or '-' to read stdin."
+    )
+    api.add_argument("--port", type=int, default=8792, help="serve: loopback port (8792).")
+    api.add_argument("--rotate", action="store_true", help="token-init: replace the token.")
+    subs.add_parser(
+        "mcp",
+        help="Stdio MCP server: read tools plus request-only approval tools.",
+        allow_abbrev=False,
+    )
+    approvals = subs.add_parser("approvals", help="Owner-approval worker.", allow_abbrev=False)
+    approvals_subs = approvals.add_subparsers(dest="approvals_action", required=True)
+    run_cmd = approvals_subs.add_parser(
+        "run",
+        help="Propose, ask the owner in Telegram, and execute approved requests.",
+        allow_abbrev=False,
+    )
+    run_cmd.add_argument("--once", action="store_true", help="One tick, then exit.")
+    run_cmd.add_argument("--interval", type=int, default=60, help="Seconds per tick (30-3600).")
+    run_cmd.add_argument(
+        "--no-propose",
+        action="store_true",
+        help="Process queued requests only; do not propose new continuations.",
+    )
+    connector = subs.add_parser(
+        "connector", help="Fixed guardian/chatgpt connector state.", allow_abbrev=False
+    )
+    connector_subs = connector.add_subparsers(dest="connector_action")
+    connector_subs.add_parser("status", help="Show state and prepared setup steps (default).")
+    tunnel = connector_subs.add_parser("tunnel-id", help="Record the non-secret tunnel id.")
+    tunnel.add_argument("tunnel_id", help="tunnel_<letters and digits>; never a secret.")
+    unit = subs.add_parser(
+        "unit", help="Print a systemd user unit template (not installed).", allow_abbrev=False
+    )
+    unit.add_argument("which", choices=("api", "worker"))
+
+
+_CONTROL = {"api", "mcp", "approvals", "connector", "unit"}
+
+
+def _run_control(args: argparse.Namespace) -> int:
+    from ..chatgpt_control import cli
+
+    action = args.guardian_action
+    if action == "api":
+        return cli.run_api(args)
+    if action == "mcp":
+        return cli.run_mcp(args)
+    if action == "approvals":
+        return cli.run_approvals(args)
+    if action == "connector":
+        args.connector_action = args.connector_action or "status"
+        return cli.run_connector(args)
+    return cli.run_unit(args)
 
 
 def _systemctl(command: list[str]) -> tuple[int, str]:
@@ -352,6 +421,8 @@ def _logs(args: argparse.Namespace) -> int:
 
 
 def run(args: argparse.Namespace) -> int:
+    if args.guardian_action in _CONTROL:
+        return _run_control(args)
     if args.guardian_action in ("monitor", "tui"):
         from ..chatgpt_monitor import run as run_monitor
 
