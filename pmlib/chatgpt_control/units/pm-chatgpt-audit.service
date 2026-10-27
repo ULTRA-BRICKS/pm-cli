@@ -11,6 +11,8 @@
 #   PM_AUDIT_TASK_LAUNCHER=/abs/path/to/task    the installed `task` launcher used to warm the
 #       Laya server (default: ~/.local/bin/task). Must be absolute; a worktree path is never baked
 #       into this template.
+#   PM_AUDIT_LAYA_UNIT=name.service   a dedicated user unit that runs the warm Laya server in the
+#       foreground; ExecStartPre starts it (preferred over the detached launcher, see NOTE below).
 #   PM_CHATGPT_AUDIT_LAYA_SOCKET=/abs/path/laya-X.sock   use exactly this private socket instead of
 #       the highest-version laya-*.sock under ~/.local/state/task-cli/classify.
 #   PM_AUDIT_PLAYWRIGHT_SITE_PACKAGES=/path/to/site-packages   for setups where the pm entry point
@@ -38,15 +40,18 @@ EnvironmentFile=-%h/.config/pm-chatgpt-audit/env
 # cold-starts it. An unloaded multilingual model is only asked to start loading by one
 # content-free probe; pm itself never spawns a model or waits for a download. ('$$' is systemd's
 # escape for a literal '$'.)
-ExecStartPre=-/bin/sh -c 'launcher="$${PM_AUDIT_TASK_LAUNCHER:-$$HOME/.local/bin/task}"; case "$$launcher" in /*) ;; *) echo "PM_AUDIT_TASK_LAUNCHER must be an absolute path" >&2; exit 1;; esac; exec "$$launcher" classify-server start'
+ExecStartPre=-/bin/sh -c 'unit="$${PM_AUDIT_LAYA_UNIT:-}"; if [ -n "$$unit" ]; then case "$$unit" in -*|*..*|*[!A-Za-z0-9@._-]*) echo "PM_AUDIT_LAYA_UNIT is not a plain unit name" >&2; exit 1;; esac; exec systemctl --user start "$$unit"; fi; launcher="$${PM_AUDIT_TASK_LAUNCHER:-$$HOME/.local/bin/task}"; case "$$launcher" in /*) ;; *) echo "PM_AUDIT_TASK_LAUNCHER must be an absolute path" >&2; exit 1;; esac; exec "$$launcher" classify-server start'
 ExecStart=%h/.local/bin/pm chatgpt audit --workspace all --days 7 --json --notify
-# Bounded resources: low CPU/IO priority and a hard cap on tasks. KillMode=process lets the warm
-# Laya server that ExecStartPre brings up outlive this oneshot (it idles itself out after 900 s).
+# Bounded resources: low CPU/IO priority and a hard cap on tasks.
 Nice=10
 CPUWeight=50
 IOWeight=50
 TasksMax=256
-KillMode=process
+# NOTE: systemd cleans an ExecStartPre child's cgroup before ExecStart, so a daemon the default
+# starter detaches does not survive into the audit. A host that needs the warm server up for the
+# run sets PM_AUDIT_LAYA_UNIT=<name> in the environment file: ExecStartPre then runs
+# `systemctl --user start <name>` for a dedicated foreground `classify_server` unit that has its
+# own memory bound, and this unit stays light.
 # A oneshot unit never overlaps itself; the in-code flock exits 75 when another audit is busy.
 Restart=no
 # 3 = partial coverage, 4 = an account unavailable: both are fully reported in the JSON and via

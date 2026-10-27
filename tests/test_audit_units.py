@@ -112,3 +112,38 @@ def test_a_relative_launcher_is_refused_and_never_executed(tmp_path, bad):
 
 def test_a_failing_starter_does_not_fail_the_audit_unit():
     assert exec_start_pre().startswith("ExecStartPre=-")  # the leading dash ignores the failure
+
+
+def fake_systemctl(tmp_path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    log = tmp_path / "systemctl.log"
+    script = bindir / "systemctl"
+    script.write_text(f'#!/bin/sh\necho "$@" >> "{log}"\n')
+    script.chmod(0o755)
+    return bindir, log
+
+
+def test_a_dedicated_laya_unit_is_started_instead_of_a_detached_daemon(tmp_path):
+    bindir, log = fake_systemctl(tmp_path)
+    script, launcher_log = launcher(tmp_path)
+    result = run_pre(
+        {
+            "HOME": str(tmp_path),
+            "PATH": f"{bindir}:{os.environ['PATH']}",
+            "PM_AUDIT_LAYA_UNIT": "guardian-laya.service",
+            "PM_AUDIT_TASK_LAUNCHER": str(script),
+        }
+    )
+    assert result.returncode == 0
+    assert log.read_text().split() == ["--user", "start", "guardian-laya.service"]
+    assert not launcher_log.exists()  # the detached starter is not used when a unit is named
+
+
+@pytest.mark.parametrize("bad", ["--now", "a b", "x;y", "../x.service", "-h"])
+def test_a_malformed_laya_unit_name_is_refused_and_nothing_is_started(tmp_path, bad):
+    bindir, log = fake_systemctl(tmp_path)
+    result = run_pre(
+        {"HOME": str(tmp_path), "PATH": f"{bindir}:{os.environ['PATH']}", "PM_AUDIT_LAYA_UNIT": bad}
+    )
+    assert result.returncode != 0 and not log.exists()

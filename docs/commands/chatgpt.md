@@ -527,7 +527,11 @@ pm-chatgpt-audit.service`), rate-limited. Optional per-user settings live in
 `PM_CHATGPT_AUDIT_LAYA_SOCKET` and `PM_AUDIT_PLAYWRIGHT_SITE_PACKAGES`. The service starts the warm
 Laya server best-effort with `task classify-server start` (the supported idempotent starter; it
 preloads the English model only, the multilingual model loads on the first routed request); pm
-itself never spawns a model. Exit codes 3, 4 and 75 do not mark the unit failed.
+itself never spawns a model. systemd removes an ExecStartPre child's cgroup before ExecStart, so
+that detached starter cannot keep a daemon alive for the run: set `PM_AUDIT_LAYA_UNIT=<name>` in
+the environment file and `ExecStartPre` instead runs `systemctl --user start <name>` for a
+dedicated foreground `classify_server` unit with its own memory bound (the audit then waits for the
+socket). Exit codes 3, 4 and 75 do not mark the unit failed.
 
 ### Validation results and limitations
 
