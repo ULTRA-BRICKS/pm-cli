@@ -117,12 +117,12 @@ def reader_for(page, *, pages=None, driver_kwargs=None, timeout_ms=15000):
 
 # --- endpoints -----------------------------------------------------------------------------
 def test_endpoint_per_account():
-    assert ab.endpoint_for("home") == "http://127.0.0.1:9224"
+    assert ab.endpoint_for("home") == "http://127.0.0.1:9226"
     assert ab.endpoint_for("glide.vc") == "http://127.0.0.1:9223"
     with pytest.raises(ValueError):
         ab.endpoint_for("other")
     assert ab.make_reader("glide.vc")._endpoint == "http://127.0.0.1:9223"
-    assert ab.make_reader("home", endpoint="http://127.0.0.1:9224")._endpoint.endswith("9224")
+    assert ab.make_reader("home", endpoint="http://127.0.0.1:9226")._endpoint.endswith("9226")
 
 
 @pytest.mark.parametrize(
@@ -233,7 +233,7 @@ def test_reuses_open_chatgpt_page_and_connects_like_guardian():
         None, pages=[other, closed, lookalike, userinfo, http, target]
     )
     assert reader.read_conversation("c1", 3) == {"id": "c1", "native_format": "flat"}
-    assert driver.connects == [("http://127.0.0.1:9224", {"timeout": 10000, "no_defaults": True})]
+    assert driver.connects == [("http://127.0.0.1:9226", {"timeout": 10000, "no_defaults": True})]
     assert len(target.calls) == 1
     assert target.calls[0][1] == {
         "mode": "data",

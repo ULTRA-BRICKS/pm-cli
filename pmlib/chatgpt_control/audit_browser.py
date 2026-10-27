@@ -54,7 +54,9 @@ _ENDPOINTS = {
     "project_ids": "/backend-api/gizmos/snorlax/sidebar?owned_only=true&conversations_per_gizmo=0&limit={limit}&cursor={offset}",  # best-effort
 }
 
-ENDPOINTS = {"home": "http://127.0.0.1:9224", "glide.vc": "http://127.0.0.1:9223"}
+# Guardian's own browser units: home --remote-debugging-port=9226, glide.vc 9223 (9224 is an
+# unrelated relay that is not Chrome).
+ENDPOINTS = {"home": "http://127.0.0.1:9226", "glide.vc": "http://127.0.0.1:9223"}
 _ENDPOINT_RE = re.compile(r"http://127\.0\.0\.1:([0-9]{1,5})")
 _HEX64 = re.compile(r"[0-9a-f]{64}")
 _PAGE_ORIGIN = "chatgpt.com"
