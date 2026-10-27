@@ -22,7 +22,9 @@ import hashlib
 import re
 import subprocess
 from collections.abc import Callable
+from pathlib import Path
 
+from .audit_guard import LockBusy, RunLock
 from .audit_store import AuditStore
 from .audit_urls import conversation_url
 from .tg_transport import discover_owner
@@ -31,6 +33,7 @@ SENT = "sent"
 UNCERTAIN = "uncertain"
 FAILED = "failed"
 
+NOTIFY_LOCK = "notify.lock"
 TG_TIMEOUT = 30
 OUTPUT_LIMIT = 4096
 MAX_TEXT = 3500
@@ -44,6 +47,18 @@ HEADER = "\u0410\u0443\u0434\u0438\u0442 \u0437\u0430\u0434\u0430\u0447 ChatGPT"
 UNAVAILABLE_LABEL = "unavailable"
 
 Send = Callable[[str], str]
+_RECEIPT = re.compile(rb"#(\d{1,12})\b")
+
+
+class Delivery(str):
+    """A delivery verdict that still equals its plain token and may carry the ``tg`` receipt."""
+
+    receipt: str | None = None
+
+    def __new__(cls, verdict: str, receipt: str | None = None):
+        self = super().__new__(cls, verdict)
+        self.receipt = receipt
+        return self
 
 
 def _safe(value: object) -> str | None:
@@ -155,8 +170,13 @@ def _history(events: list[dict]) -> dict[str, dict]:
         if not isinstance(key, str) or type(at) not in (int, float):
             continue
         entry = book.setdefault(
-            key, {"sent": False, "uncertain": False, "failed": 0, "last_failed": None}
+            key,
+            {"sent": False, "uncertain": False, "failed": 0, "last_failed": None, "pending": False},
         )
+        if kind == "delivery_intent":
+            entry["pending"] = True
+            continue
+        entry["pending"] = False
         if kind == "sent":
             entry["sent"] = True
         elif kind == "delivery_uncertain":
@@ -166,6 +186,9 @@ def _history(events: list[dict]) -> dict[str, dict]:
             entry["last_failed"] = (
                 at if entry["last_failed"] is None else max(entry["last_failed"], at)
             )
+    for entry in book.values():
+        # An intent with no outcome means the process died around the send: never replay it.
+        entry["uncertain"] = entry["uncertain"] or entry["pending"]
     return book
 
 
@@ -195,9 +218,11 @@ def make_tg_sender(run=subprocess.run, owner=discover_owner, binary: str = "tg")
         except Exception:  # noqa: BLE001 - after launch the delivery state is unknown
             return UNCERTAIN
         out = proc.stdout or b""
-        first = (out[:OUTPUT_LIMIT].decode("utf-8", "replace").splitlines() or [""])[0]
+        head = out[:OUTPUT_LIMIT].splitlines()[:1]
+        first = head[0].decode("utf-8", "replace") if head else ""
         if proc.returncode == 0 and first.startswith("OK"):
-            return SENT
+            found = _RECEIPT.search(head[0])
+            return Delivery(SENT, found.group(1).decode() if found else None)
         if proc.returncode in (78, 2):
             return FAILED
         return UNCERTAIN
@@ -219,17 +244,11 @@ def _result(outcome: str, **fields) -> dict:
     return base
 
 
-def notify_report(
-    report: dict,
-    previous: dict | None,
-    store: AuditStore,
-    *,
-    now: float,
-    send: Send | None = None,
-    cooldown_seconds: float = 3600.0,
-    max_items: int = 20,
-    max_attempts: int = 3,
-) -> dict:
+def _claim(report, previous, store, now, cooldown_seconds, max_items, max_attempts):
+    """Decide what is eligible and persist its delivery intents; returns a result or the claim.
+
+    Runs under the notification lock so two overlapping audits can never both claim a key.
+    """
     log = store.notification_log()
     try:
         book = _history(log.read_all())
@@ -261,6 +280,37 @@ def notify_report(
     batch = eligible[:max_items]
     text = _text_for(batch, len(eligible) - len(batch))
     try:
+        for item in eligible:
+            log.append({"kind": "delivery_intent", "at": now, "key": item["key"]})
+    except Exception:  # noqa: BLE001 - without a durable intent nothing may be sent
+        return _result("error", **base, log="intent-append-failed")
+    return log, eligible, text, base
+
+
+def notify_report(
+    report: dict,
+    previous: dict | None,
+    store: AuditStore,
+    *,
+    now: float,
+    send: Send | None = None,
+    cooldown_seconds: float = 3600.0,
+    max_items: int = 20,
+    max_attempts: int = 3,
+) -> dict:
+    try:
+        with RunLock(Path(store.directory) / NOTIFY_LOCK):
+            claimed = _claim(
+                report, previous, store, now, cooldown_seconds, max_items, max_attempts
+            )
+    except LockBusy:
+        return _result("busy")  # another run is claiming deliveries; its intents dedup this one
+    except Exception:  # noqa: BLE001 - an unusable lock must never become an unguarded send
+        return _result("error", log="lock-failed")
+    if isinstance(claimed, dict):
+        return claimed
+    log, eligible, text, base = claimed
+    try:
         verdict = (send or make_tg_sender())(text)
     except Exception:  # noqa: BLE001 - a raising sender has an unknown delivery state
         verdict = UNCERTAIN
@@ -268,14 +318,20 @@ def notify_report(
         SENT: ("sent", "sent"),
         FAILED: ("delivery_failed", "delivery_failed"),
     }.get(verdict, ("delivery_uncertain", "delivery_uncertain"))
+    receipt = getattr(verdict, "receipt", None) if kind == "sent" else None
     fields = {
         **base,
         "sent_items": len(eligible) if kind == "sent" else 0,
         "keys": [i["key"] for i in eligible][:20],
     }
+    if receipt:
+        fields["receipt"] = receipt
     try:
         for item in eligible:
-            log.append({"kind": kind, "at": now, "key": item["key"]})
+            event = {"kind": kind, "at": now, "key": item["key"]}
+            if receipt:
+                event["receipt"] = receipt
+            log.append(event)
     except Exception:  # noqa: BLE001 - the send already happened; report, never replay
         fields["log"] = "append-failed"
     return _result(outcome, **fields)

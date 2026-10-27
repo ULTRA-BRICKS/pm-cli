@@ -475,6 +475,26 @@ def test_failing_model_lookup_never_skips_and_still_proposes(tmp_path):
     assert len(poller.poll_once(services, expected_model=boom)["proposed"]) == 1
 
 
+def test_the_provider_profile_is_probed_once_per_tick_not_once_per_row(tmp_path):
+    from pmlib.chatgpt_control import audit_store
+
+    other = "11111111-1111-4111-8111-111111111111"
+    other_chat = f"https://chatgpt.com/c/{other}"
+    services, _, _ = fresh(tmp_path, [row(CONV_CHAT), row(other_chat)])
+    services.audit_dir = tmp_path / "audit"
+    store = audit_store.AuditStore(services.audit_dir)
+    store.put(entry())
+    store.put(entry(conversation_id=other))
+    probes = []
+
+    def counting():
+        probes.append(1)
+        return PROFILE
+
+    report = poller.poll_once(services, expected_model=counting)
+    assert report["skipped"] == {"task-finished": 2} and len(probes) == 1
+
+
 def test_poller_never_writes_the_audit_store(tmp_path):
     services, model = audited(tmp_path, entry("incomplete"))
     before = {p: p.read_bytes() for p in (tmp_path / "audit").rglob("*") if p.is_file()}

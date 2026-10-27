@@ -362,7 +362,7 @@ a task done, sends, or unblocks anything.
 
 ```
 pm chatgpt audit --workspace home|glide.vc|all|global --days N --turns N --json [--notify] [--include-text] [--playwright-site-packages DIR]
-pm chatgpt audit bench [--record] [--json]
+pm chatgpt audit bench [--record] [--json] [--budget SECONDS]
 pm chatgpt audit bind --workspace home|glide.vc
 pm chatgpt unit audit-service|audit-timer     # print a systemd user unit template (never installed by pm)
 ```
@@ -479,14 +479,25 @@ it passes (zero false `done` on both splits, zero held-out false `blocked`, held
 >= 75% and coverage >= 70%, so abstaining on everything cannot pass); `--record` writes
 `validation.json` ONLY for such a passing run, bound to the prompt digest, the checkpoint/window
 identities, the thresholds+logic digest and the corpus digest, so any change to one of them
-invalidates it. Exit 1 = ran but not validated, 2 = classifier unavailable (nothing recorded).
+invalidates it. Exit 1 = ran but not validated, 2 = classifier unavailable (nothing recorded),
+3 = the global `--budget` (default 180 s wall clock, spent on the pipeline system first) ran out:
+the report is marked `partial` (`evaluated`/`planned`), `passed` is false and nothing is recorded,
+so a timeout can never read as a pass. The clock starts before the provider probe and is checked
+between predictions and once more at the end (an overshoot during the last call is partial too);
+one in-flight provider call keeps its own 30 s socket timeout and is not interrupted.
 pm still never sends; the owner-approved continuation policy above is unchanged.
 
 ### Notifications
 
 `--notify` reports significant deltas only, through one-way owner-private
-`tg --automated --tag report`, with ids, URLs, states and reasons only. A `delivery_uncertain`
-delivery is never replayed; definite failures are retried under a cooldown.
+`tg --automated --tag report`, with ids, URLs, states and reasons only. A durable
+`delivery_intent` line is written BEFORE the send and an intent with no recorded outcome counts
+as uncertain, so a crash around the send can never duplicate it; if the intent cannot be written
+nothing is sent. The `tg #<id>` receipt from the `OK` line is stored with the `sent` event and
+printed as `receipt`: it is the only proof of delivery. A `delivery_uncertain` delivery is never
+replayed; definite failures are retried under a cooldown. Eligibility and intents are claimed
+under a non-blocking `notify.lock` in the audit directory: an overlapping run reports `busy` and
+sends nothing.
 
 ### Poller
 
@@ -506,8 +517,9 @@ pm chatgpt unit audit-timer   > ~/.config/systemd/user/pm-chatgpt-audit.timer
 systemctl --user daemon-reload && systemctl --user enable --now pm-chatgpt-audit.timer
 ```
 
-Both commands only print; pm never installs or enables a unit. The timer runs every 30 minutes
-(`OnCalendar=*:0/30`, `Persistent=false`; the oneshot service never overlaps itself and the run
+Both commands only print; pm never installs or enables a unit. The timer runs at :00 and :30
+Europe/Belgrade (`OnCalendar=*-*-* *:00,30:00 Europe/Belgrade`, `Persistent=false`; the service
+audits the last 7 days with low CPU/IO weight and a task cap, the oneshot never overlaps itself and the run
 lock exits 75 when another audit is busy). Logs go to the journal (`journalctl --user -u
 pm-chatgpt-audit.service`), rate-limited. Optional per-user settings live in
 `~/.config/pm-chatgpt-audit/env`: `PM_AUDIT_TASK_LAUNCHER` (an ABSOLUTE path to the installed

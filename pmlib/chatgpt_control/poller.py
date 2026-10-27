@@ -163,8 +163,26 @@ def _audit_skip_reason(
     return _AUDIT_SKIPS.get(entry.task_state)
 
 
+def _once(probe: Callable[[], str]) -> Callable[[], str]:
+    """Memoise one tick's provider probe (value or failure) so N rows cost one socket round-trip."""
+    outcome: list = []
+
+    def cached() -> str:
+        if not outcome:
+            try:
+                outcome.append((True, probe()))
+            except Exception as exc:  # noqa: BLE001 - replayed to every caller of this tick
+                outcome.append((False, exc))
+        ok, value = outcome[0]
+        if not ok:
+            raise value
+        return value
+
+    return cached
+
+
 def poll_once(services: Services, expected_model: Callable[[], str] | None = None) -> dict:
-    model = expected_model or default_expected_model
+    model = _once(expected_model or default_expected_model)
     now = services.clock()
     report: dict = {
         "proposed": [],

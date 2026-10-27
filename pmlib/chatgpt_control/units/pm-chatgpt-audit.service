@@ -39,7 +39,14 @@ EnvironmentFile=-%h/.config/pm-chatgpt-audit/env
 # content-free probe; pm itself never spawns a model or waits for a download. ('$$' is systemd's
 # escape for a literal '$'.)
 ExecStartPre=-/bin/sh -c 'launcher="$${PM_AUDIT_TASK_LAUNCHER:-$$HOME/.local/bin/task}"; case "$$launcher" in /*) ;; *) echo "PM_AUDIT_TASK_LAUNCHER must be an absolute path" >&2; exit 1;; esac; exec "$$launcher" classify-server start'
-ExecStart=%h/.local/bin/pm chatgpt audit --workspace all --days 14 --json --notify
+ExecStart=%h/.local/bin/pm chatgpt audit --workspace all --days 7 --json --notify
+# Bounded resources: low CPU/IO priority and a hard cap on tasks. KillMode=process lets the warm
+# Laya server that ExecStartPre brings up outlive this oneshot (it idles itself out after 900 s).
+Nice=10
+CPUWeight=50
+IOWeight=50
+TasksMax=256
+KillMode=process
 # A oneshot unit never overlaps itself; the in-code flock exits 75 when another audit is busy.
 Restart=no
 # 3 = partial coverage, 4 = an account unavailable: both are fully reported in the JSON and via

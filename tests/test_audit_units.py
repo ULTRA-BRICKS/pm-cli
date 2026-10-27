@@ -36,7 +36,7 @@ def shell_script(line: str) -> str:
 
 def test_the_timer_runs_every_half_hour_without_catching_up():
     timer = unit("pm-chatgpt-audit.timer")
-    assert timer["Timer"]["OnCalendar"] == "*:0/30"
+    assert timer["Timer"]["OnCalendar"] == "*-*-* *:00,30:00 Europe/Belgrade"
     assert timer["Timer"]["Unit"] == "pm-chatgpt-audit.service"
     assert timer["Timer"]["Persistent"] == "false"
     assert timer["Install"]["WantedBy"] == "timers.target"
@@ -48,7 +48,8 @@ def test_the_service_is_a_non_overlapping_bounded_oneshot():
     assert service["StandardOutput"] == "journal" and service["StandardError"] == "journal"
     assert service["LogRateLimitBurst"] and service["LogRateLimitIntervalSec"]
     assert int(service["TimeoutStartSec"]) < 1800  # shorter than the 30 minute period
-    assert "chatgpt audit --workspace all --days 14 --json --notify" in service["ExecStart"]
+    assert "chatgpt audit --workspace all --days 7 --json --notify" in service["ExecStart"]
+    assert service["Nice"] and service["CPUWeight"] and service["TasksMax"]
     sections = [ln for ln in UNITS.joinpath("pm-chatgpt-audit.service").read_text().splitlines()]
     assert "[Install]" not in sections
 

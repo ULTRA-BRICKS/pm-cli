@@ -384,3 +384,78 @@ def test_a_tune_only_run_never_records(tmp_path):
         directory=tmp_path / "c",
     )
     assert not (tmp_path / "c").exists()
+
+
+class Ticking:
+    """A monotonic clock that advances one second per reading."""
+
+    def __init__(self):
+        self.now = 0.0
+
+    def __call__(self):
+        self.now += 1.0
+        return self.now
+
+
+def test_an_exhausted_budget_is_a_partial_never_a_pass_and_records_nothing(tmp_path):
+    import io
+
+    out = io.StringIO()
+    code = bench.run(
+        classifier=FakeLayaClassifier(),
+        out=out,
+        as_json=True,
+        record=True,
+        directory=tmp_path / "p",
+        budget_seconds=12.0,
+        monotonic=Ticking(),
+    )
+    report = json.loads(out.getvalue())
+    assert code == 3 and report["partial"] is True and report["passed"] is False
+    assert 0 < report["evaluated"] < report["planned"]
+    assert not (tmp_path / "p").exists()
+
+
+def test_a_partial_markdown_report_says_so_and_is_not_validated():
+    import io
+
+    out = io.StringIO()
+    bench.run(classifier=FakeLayaClassifier(), out=out, budget_seconds=12.0, monotonic=Ticking())
+    assert "PARTIAL" in out.getvalue() and "PASSED" not in out.getvalue()
+
+
+def test_a_budget_that_expires_during_the_last_prediction_is_still_partial(tmp_path):
+    import io
+
+    clock = [0.0]
+    last_ask = 1 + 2 * len(bench.load_cases())  # the probe plus the two raw systems' calls
+
+    class SlowLast(FakeLayaClassifier):
+        def ask(self, message, questions):
+            reply = super().ask(message, questions)
+            if self.calls == last_ask:
+                clock[0] = 100.0
+            return reply
+
+    out = io.StringIO()
+    code = bench.run(
+        classifier=SlowLast(),
+        out=out,
+        as_json=True,
+        record=True,
+        directory=tmp_path / "late",
+        budget_seconds=1.0,
+        monotonic=lambda: clock[0],
+    )
+    report = json.loads(out.getvalue())
+    assert code == 3 and report["partial"] is True and report["passed"] is False
+    assert not (tmp_path / "late").exists()
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), 0.0, -5.0])
+def test_a_non_finite_or_non_positive_budget_is_refused_before_anything_runs(bad):
+    import io
+
+    out, fake = io.StringIO(), FakeLayaClassifier()
+    assert bench.run(classifier=fake, out=out, budget_seconds=bad) == 2
+    assert out.getvalue() == "" and fake.calls == 0

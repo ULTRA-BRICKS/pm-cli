@@ -254,6 +254,13 @@ def _configure_audit(subs) -> None:
         "--record", dest="bench_record", action="store_true", help="Persist a passing result."
     )
     bench.add_argument("--json", dest="bench_json", action="store_true", help="JSON result.")
+    bench.add_argument(
+        "--budget",
+        dest="bench_budget",
+        type=float,
+        default=None,
+        help="Global wall-clock seconds for the whole run (default 180); exhausting it exits 3.",
+    )
     bind = actions.add_parser(
         "bind",
         help="Record which account the owned browser session is logged into.",

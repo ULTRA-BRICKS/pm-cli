@@ -173,11 +173,16 @@ def test_append_failure_reported_and_no_replay(tmp_path):
     store, rec = AuditStore(tmp_path), Recorder()
 
     class BrokenLog:
+        def __init__(self):
+            self.appended = 0
+
         def read_all(self):
             return []
 
         def append(self, event):
-            raise OSError("disk")
+            self.appended += 1
+            if self.appended > 1:  # the intent is durable; the outcome write fails
+                raise OSError("disk")
 
     store.notification_log = lambda: BrokenLog()
     out = run(report([conv()]), None, store, rec)
@@ -313,3 +318,88 @@ def test_default_max_items_is_20():
     import inspect
 
     assert inspect.signature(an.notify_report).parameters["max_items"].default == 20
+
+
+def test_the_delivery_intent_is_durable_before_the_message_is_sent(tmp_path):
+    store, seen = AuditStore(tmp_path), []
+
+    def send(text):
+        seen.append([e["kind"] for e in store.notification_log().read_all()])
+        return an.SENT
+
+    assert run(report([conv()]), None, store, send)["outcome"] == "sent"
+    assert seen == [["delivery_intent"]]
+
+
+def test_a_crash_during_send_never_replays_the_message(tmp_path):
+    store = AuditStore(tmp_path)
+
+    def crash(text):
+        raise KeyboardInterrupt
+
+    try:
+        run(report([conv()]), None, store, crash)
+    except KeyboardInterrupt:
+        pass
+    rec = Recorder()
+    out = run(report([conv()]), None, AuditStore(tmp_path), rec, now=99999.0)
+    assert rec.texts == [] and out["outcome"] == "suppressed"
+    assert out["suppressed_uncertain"] == 1
+
+
+def test_a_failed_intent_write_sends_nothing(tmp_path):
+    store, rec = AuditStore(tmp_path), Recorder()
+    log = store.notification_log()
+    log.append = lambda event: (_ for _ in ()).throw(OSError("disk"))
+    store.notification_log = lambda: log
+    out = run(report([conv()]), None, store, rec)
+    assert rec.texts == [] and out["outcome"] == "error"
+
+
+def test_the_tg_receipt_is_the_proof_and_is_persisted(tmp_path):
+    fake = FakeRun(proc(0, b""), proc(0, b"OK sent #4321\n"))
+    verdict = sender(fake)("hello")
+    assert verdict == an.SENT and verdict.receipt == "4321"
+    store = AuditStore(tmp_path)
+    out = run(report([conv()]), None, store, lambda text: verdict)
+    assert out["receipt"] == "4321"
+    sent = [e for e in store.notification_log().read_all() if e["kind"] == "sent"]
+    assert sent and sent[0]["receipt"] == "4321"
+
+
+def test_two_overlapping_audits_claim_the_delivery_once(tmp_path):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    barrier = threading.Barrier(2)
+    store = AuditStore(tmp_path)
+    real = store.notification_log()
+
+    class Slow:
+        def read_all(self):
+            snapshot = real.read_all()
+            try:
+                barrier.wait(timeout=0.5)  # both readers see the same empty history
+            except threading.BrokenBarrierError:
+                pass
+            return snapshot
+
+        def append(self, event):
+            real.append(event)
+
+    store.notification_log = lambda: Slow()
+    sends = []
+
+    def send(text):
+        sends.append(text)
+        return an.SENT
+
+    with ThreadPoolExecutor(2) as pool:
+        results = list(
+            pool.map(
+                lambda _: an.notify_report(report([conv()]), None, store, now=1, send=send),
+                range(2),
+            )
+        )
+    assert len(sends) == 1
+    assert sorted(r["outcome"] for r in results) == ["busy", "sent"]

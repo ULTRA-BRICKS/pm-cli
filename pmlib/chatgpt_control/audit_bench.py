@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import resources
@@ -70,6 +71,9 @@ CONVERSATION = "bench-conversation"
 # The pass rule is fixed here, before any held-out number is looked at.
 PASS_MIN_HELDOUT_EXACT = 0.75
 PASS_MIN_HELDOUT_COVERAGE = 0.70
+# One global wall-clock budget for the whole run; running out is exit 3, never a pass.
+DEFAULT_BUDGET_SECONDS = 180.0
+PARTIAL_EXIT = 3
 
 
 @dataclass(frozen=True)
@@ -464,40 +468,56 @@ def case_route(case: Case) -> str:
     return route_for(f"{case.request} {case.final}")
 
 
-def evaluate(cases: list[Case], classifier, *, now: float = NOW) -> dict:
-    """Metrics per system and split, measured through ``classifier`` (a ``LayaClassifier``)."""
+def evaluate(
+    cases: list[Case], classifier, *, now: float = NOW, expired: Callable[[], bool] | None = None
+) -> dict:
+    """Metrics per system and split, measured through ``classifier`` (a ``LayaClassifier``).
+
+    ``expired`` is the global budget: once it reports True no further case is predicted, and each
+    system is scored over the cases it did reach (``evaluated``/``total`` say how many).
+    """
     systems = {
         "raw-noul-v1": lambda c: predict_raw_noul(c, classifier.ask),
         "raw-choice": lambda c: predict_raw_choice(c, classifier.ask),
         "pipeline": lambda c: predict_pipeline(c, classifier.classify, now=now),
     }
-    report: dict = {}
-    for name, predict in systems.items():
-        preds = {c.id: predict(c) for c in cases}
-        report[name] = {"cases": {c.id: preds[c.id].label for c in cases}}
-        splits = sorted({c.split for c in cases})
-        report[name]["by_split"] = {
-            s: score([(c.expected, preds[c.id].label) for c in cases if c.split == s])
-            for s in splits
+    splits = sorted({c.split for c in cases})
+    results: dict = {}
+    # The pipeline is the system that decides things, so it spends the budget first.
+    for name in ("pipeline", "raw-choice", "raw-noul-v1"):
+        preds: dict[str, Prediction] = {}
+        for c in cases:
+            if expired is not None and expired():
+                break
+            preds[c.id] = systems[name](c)
+        reached = [c for c in cases if c.id in preds]
+        results[name] = {
+            "evaluated": len(reached),
+            "total": len(cases),
+            "cases": {c.id: preds[c.id].label for c in reached},
+            "by_split": {
+                s: score([(c.expected, preds[c.id].label) for c in reached if c.split == s])
+                for s in splits
+            },
+            "by_route": {
+                r: score([(c.expected, preds[c.id].label) for c in reached if case_route(c) == r])
+                for r in ROUTES
+            },
+            "errors": {
+                s: [
+                    {
+                        "id": c.id,
+                        "expected": c.expected,
+                        "got": preds[c.id].label,
+                        "reasons": list(preds[c.id].reasons),
+                    }
+                    for c in reached
+                    if c.split == s and preds[c.id].label != c.expected
+                ]
+                for s in splits
+            },
         }
-        report[name]["by_route"] = {
-            r: score([(c.expected, preds[c.id].label) for c in cases if case_route(c) == r])
-            for r in ROUTES
-        }
-        report[name]["errors"] = {
-            s: [
-                {
-                    "id": c.id,
-                    "expected": c.expected,
-                    "got": preds[c.id].label,
-                    "reasons": list(preds[c.id].reasons),
-                }
-                for c in cases
-                if c.split == s and preds[c.id].label != c.expected
-            ]
-            for s in splits
-        }
-    return report
+    return {name: results[name] for name in systems}
 
 
 COMPARABILITY = (
@@ -510,15 +530,24 @@ COMPARABILITY = (
 
 
 def build_report(
-    cases: list[Case], classifier, *, now: float, probe_meta: dict | None = None
+    cases: list[Case],
+    classifier,
+    *,
+    now: float,
+    probe_meta: dict | None = None,
+    expired: Callable[[], bool] | None = None,
 ) -> dict:
     from datetime import UTC, datetime
 
     from .audit_classifier import PROMPT_VERSION
 
     model = classifier.profile()
-    systems = evaluate(cases, classifier, now=NOW)
+    systems = evaluate(cases, classifier, now=NOW, expired=expired)
     pipeline = systems["pipeline"]["by_split"]
+    planned = sum(body["total"] for body in systems.values())
+    evaluated = sum(body["evaluated"] for body in systems.values())
+    # A budget that ran out DURING the last call still means the run overshot: never a pass.
+    partial = evaluated < planned or (expired is not None and expired())
     return {
         "model": model,
         "prompt_version": PROMPT_VERSION,
@@ -532,7 +561,10 @@ def build_report(
         "routes": {r: sum(1 for c in cases if case_route(c) == r) for r in ROUTES},
         "model_probe": probe_meta or {},
         "comparability": COMPARABILITY,
-        "passed": passes(pipeline),
+        "partial": partial,
+        "planned": planned,
+        "evaluated": evaluated,
+        "passed": passes(pipeline) and not partial,
         "pilot_raw_choice": PILOT_RAW_CHOICE,
         "previous_pipeline": PREVIOUS_PIPELINE,
     }
@@ -554,9 +586,17 @@ def render_markdown(report: dict) -> str:
         f"- corpus digest: `{report['bench_digest'][:16]}`; cases: {report['counts']}",
         f"- thresholds: `{json.dumps(report['thresholds'], sort_keys=True)}`",
         (
-            f"- verdict: **{'PASSED' if report['passed'] else 'NOT VALIDATED'}** (pass rule: zero "
+            f"- verdict: **{_verdict_word(report)}** (pass rule: zero "
             "false-done on both splits, zero held-out false blocks, held-out exact accuracy >= "
             f"{PASS_MIN_HELDOUT_EXACT:.0%} and coverage >= {PASS_MIN_HELDOUT_COVERAGE:.0%})"
+        ),
+        (
+            f"- budget: {report['evaluated']}/{report['planned']} predictions reached"
+            + (
+                " (PARTIAL: the budget ran out, metrics cover the reached cases only)"
+                if report["partial"]
+                else ""
+            )
         ),
         (
             f"- documented counterexamples: raw pilot choice classifier "
@@ -616,6 +656,12 @@ def render_markdown(report: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _verdict_word(report: dict) -> str:
+    if report["partial"]:
+        return "NOT VALIDATED (PARTIAL RUN)"
+    return "PASSED" if report["passed"] else "NOT VALIDATED"
+
+
 def run(
     *,
     record: bool = False,
@@ -625,6 +671,8 @@ def run(
     classifier=None,
     directory: Path | None = None,
     clock=None,
+    budget_seconds: float = DEFAULT_BUDGET_SECONDS,
+    monotonic=None,
 ) -> int:
     """Run the benchmark against the real warm Laya socket; exit 0 only when validated."""
     import sys
@@ -633,14 +681,25 @@ def run(
     from . import audit_store, audit_validation
     from .audit_classifier import PROMPT_VERSION, LayaClassifier
 
+    monotonic = monotonic or time.monotonic
     out = out or sys.stdout
     now = (clock or time.time)()
+    if not (math.isfinite(budget_seconds) and budget_seconds > 0):
+        print("error: --budget must be a finite number of seconds above zero", file=sys.stderr)
+        return 2
     classifier = classifier or LayaClassifier()
+    deadline = monotonic() + budget_seconds
     probe = classifier.ask("probe", {"p": {"type": "noul", "instructions": "Is this a probe?"}})
     if probe.status != "ok":
         print(f"error: classifier {probe.status}: {probe.reason}", file=sys.stderr)
         return 2
-    report = build_report(load_cases(splits), classifier, now=now, probe_meta=probe.meta)
+    report = build_report(
+        load_cases(splits),
+        classifier,
+        now=now,
+        probe_meta=probe.meta,
+        expired=lambda: monotonic() >= deadline,
+    )
     out.write((json.dumps(report, sort_keys=True) if as_json else render_markdown(report)) + "\n")
     if record and report["passed"] and tuple(splits) == SPLITS:
         held = report["systems"]["pipeline"]["by_split"]["heldout"]
@@ -663,4 +722,6 @@ def run(
                 },
             ),
         )
+    if report["partial"]:
+        return PARTIAL_EXIT
     return 0 if report["passed"] else 1

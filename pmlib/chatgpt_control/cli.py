@@ -310,7 +310,8 @@ def run_audit_bind(args, env=None) -> int:
 
 def run_audit_bench(args) -> int:
     bench = importlib.import_module(f"{__package__}.audit_bench")
-    return bench.run(record=args.bench_record, as_json=args.bench_json)
+    kwargs = {} if args.bench_budget is None else {"budget_seconds": args.bench_budget}
+    return bench.run(record=args.bench_record, as_json=args.bench_json, **kwargs)
 
 
 def run_audit_command(args) -> int:
