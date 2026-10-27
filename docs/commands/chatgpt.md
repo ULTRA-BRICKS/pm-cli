@@ -295,11 +295,14 @@ Request status: `queued`, `asked`, `asked_post_uncertain`, `approved`, `dispatch
 
 ### Continuation policy
 
-Continuation requests require any `CHATGPT_GUARDIAN_STATE` override to resolve to the same
-database as the account's Guardian workspace configuration. A different or unreadable selection
-is refused before queuing, before asking or dispatching, and when resolving the control token.
-The override is preserved; matching overrides remain supported. This prevents approving evidence
-from one database while sending through another deployment's control service.
+Continuation requests require any `CHATGPT_GUARDIAN_STATE` override to select both the same
+recovery database and the same sibling monitor database as the account's Guardian workspace
+configuration. Guardian derives the monitor filename before resolving database symlinks, so a
+file alias can select different evidence even when the recovery database is identical. A different
+or unreadable selection is refused before queuing, before asking or dispatching, and when resolving
+the control token. The override is preserved; aliases that select the same two databases remain
+supported. This prevents approving unrelated evidence while sending through the configured
+deployment's control service.
 
 A completed answer is not a completed task, so pm only ever asks. A continuation card is proposed
 per account/chat/turn when the chat is enrolled, present, observed currently (the per-session

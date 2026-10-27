@@ -90,9 +90,19 @@ def check_body(body: object) -> dict:
 
 
 def _check_state_override(account: str, state: Path, override: str) -> None:
-    """Telemetry's environment override cannot select a different deployment database."""
+    """The override must select both the deployment state and its monitor database."""
     try:
-        matches = Path(override).expanduser().resolve() == state.resolve()
+        selected = Path(override).expanduser().absolute()
+        configured = state.expanduser().absolute()
+        # Guardian MonitorStore derives the sibling from the unresolved source name.
+        # Resolving the recovery database first would hide a file alias whose
+        # differently named monitor database supplies unrelated fresh evidence.
+        selected_monitor = selected.with_name(selected.stem + ".monitor.sqlite")
+        configured_monitor = configured.with_name(configured.stem + ".monitor.sqlite")
+        matches = (
+            selected.resolve() == configured.resolve()
+            and selected_monitor.resolve() == configured_monitor.resolve()
+        )
     except (OSError, RuntimeError, ValueError):
         matches = False
     if not matches:
