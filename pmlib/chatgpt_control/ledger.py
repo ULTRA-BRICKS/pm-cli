@@ -61,7 +61,7 @@ def ensure_private_dir(path: Path) -> None:
         os.chmod(path, 0o700)
 
 
-def _open_private(path: Path, flags: int, *, create: bool = True) -> int:
+def open_private(path: Path, flags: int, *, create: bool = True) -> int:
     try:
         flags |= os.O_NOFOLLOW | os.O_CLOEXEC | (os.O_CREAT if create else 0)
         fd = os.open(path, flags, 0o600)
@@ -140,10 +140,10 @@ class Ledger:
     @contextlib.contextmanager
     def transaction(self):
         ensure_private_dir(self.directory)
-        lock_fd = _open_private(self.lock_path, os.O_RDWR)
+        lock_fd = open_private(self.lock_path, os.O_RDWR)
         try:
             fcntl.flock(lock_fd, fcntl.LOCK_EX)
-            data_fd = _open_private(self.path, os.O_RDWR | os.O_APPEND)
+            data_fd = open_private(self.path, os.O_RDWR | os.O_APPEND)
             try:
                 yield Transaction(data_fd)
             finally:
@@ -158,7 +158,7 @@ class Ledger:
     def read_all(self) -> list[dict]:
         if not self.path.exists() and not self.path.is_symlink():
             return []
-        fd = _open_private(self.path, os.O_RDONLY, create=False)
+        fd = open_private(self.path, os.O_RDONLY, create=False)
         try:
             return Transaction(fd).events()
         finally:

@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..store import resolve_store_dir
-from . import policy
+from . import audit_store, policy
 from .errors import ApiError
 from .ledger import Ledger
 from .projection import ACTIVE, Projection, RequestState, project
@@ -54,6 +54,7 @@ class Services:
     clock: Callable[[], float] = time.time
     fetch: Callable[[tuple[str, ...]], dict] = default_fetch
     accounts: Callable[[], dict] = default_accounts
+    audit_dir: Path = field(default_factory=audit_store.default_dir)
 
     @property
     def ledger(self) -> Ledger:

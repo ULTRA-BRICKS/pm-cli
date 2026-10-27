@@ -352,3 +352,192 @@ downloads, no network listener, no credentials. After approval the state is `loc
 non-secret tunnel id. It is never reported connected: ChatGPT workspace registration, OAuth and
 the platform risk warning are the owner's steps (`pm chatgpt connector` prints them), verified
 only by a real ChatGPT tool call.
+
+## Task-completion audit (`pm chatgpt audit`)
+
+A finished answer is not a finished TASK. The audit asks, per conversation, whether the task is
+done, not whether the assistant replied. It is read-only: pm never sends to ChatGPT, and Guardian
+stays the sole browser sender. The Laya classifier is advisory evidence only; it never alone marks
+a task done, sends, or unblocks anything.
+
+```
+pm chatgpt audit --workspace home|glide.vc|all|global --days N --turns N --json [--notify] [--include-text] [--playwright-site-packages DIR]
+pm chatgpt audit bench [--record] [--json]
+pm chatgpt audit bind --workspace home|glide.vc
+pm chatgpt unit audit-service|audit-timer     # print a systemd user unit template (never installed by pm)
+```
+
+### Exit codes
+
+`0` every requested account `ok`; `3` worst status `partial`; `4` worst status `unavailable`;
+`75` another audit holds the run lock (nothing read; stdout is
+`{"schema":1,"status":"busy","reason":"lock-busy"}`); `2` usage error.
+
+### Report and coverage
+
+`--json` prints one report: `schema`, `tool`, `pm_version`, `generated_at`, `days`, `cutoff`,
+`workspaces`, `status` (worst across accounts), `classifier` (`status`, `model`, `prompt_version`,
+`reason`), `thresholds_digest`, `auto_continue`, per-account `accounts`, `totals` and `notify`.
+Each account has `status`, `reason`, `observed_account`, `not_before`, `coverage` (`listed_total`,
+`in_window`, `read`, `cached`, `skipped`, `errors`, `partial`, `budget_exhausted`, `stopped`,
+`requests`), per-scope `scopes` and `conversations` (newest first, at most 500; `omitted` counts the
+rest). Each conversation carries ids, URL, `task_state` (done|incomplete|blocked|working|unknown),
+`response_state`, `recovery_state`, `reasons`, `evidence_ids`, `fingerprint` and `source`
+(`read`|`cache`); never conversation text (unless `--include-text`) or credentials.
+
+Coverage is honest: an unavailable, stopped or unbound account is never shown as empty or fully
+audited. `ok` means every scope completed, no errors, and every in-window conversation was read or
+confirmed from an unchanged cache entry; anything missing is `partial`; nothing auditable is
+`unavailable`.
+
+### Native read and context expansion
+
+Each conversation is read with the PLURAL endpoint
+`/backend-api/conversations/<id>?num_turns=N&include_has_versions=true` (verified live: it read 51
+chats in one audit). It is fast, bounds the window to `N` turns and returns a flat, chronological
+`messages` list with `page_info.has_previous_page`. The older singular full-mapping endpoint
+`/backend-api/conversation/<id>` ignores the turn limit and times out on large chats; its
+`mapping` shape is still parsed as a fallback. The reader stamps every payload with the format of
+the endpoint it called (`native_format`: `flat` or `mapping`); the flat order is trusted only under
+that marker plus order checks (unique ids, `current_node` is the last message, no forward
+`parent_id`, user messages never go back in time), and anything unproven is `malformed`, never
+guessed. Both shapes produce the same evidence.
+
+A bare "go"/"continue" in a cut window has no goal to judge. The audit re-reads it with 8, then 16
+turns (a hard cap), each request still at least the minimum gap apart through the same guarded
+reader. If the prior substantive request is still missing at the cap, the evidence stays
+`context_truncated` and the verdict is `unknown` (`truncated-context`), never `done`.
+
+### Account binding
+
+Binding is explicit: `pm chatgpt audit bind --workspace ...` records which ChatGPT account the owned
+browser belongs to. It is re-verified on every run. A wrong or missing account yields `unknown`
+verdicts and an unavailable account (`account-not-bound` / `account-mismatch`).
+
+### Playwright
+
+The installed `pm` entry point already runs under Guardian's venv python, where Playwright is
+importable. Otherwise set `PM_AUDIT_PLAYWRIGHT_SITE_PACKAGES` or pass `--playwright-site-packages`.
+The directory must be user-owned and not group/world-writable; if not, the account is reported
+unavailable with `playwright not installed`.
+
+### Reader contract
+
+The reader reuses an already-open chatgpt.com page of the owned Guardian browser over CDP. It opens
+no tab and navigates nowhere. Requests are same-origin fetches with a 15 s timeout, at least 4 s
+apart, inside a bounded budget, and stop on 401/403/429 honouring Retry-After (recorded as
+`not_before`). The bearer token never leaves the page. Guardian's live service also latches its
+own stop on such responses.
+
+### State files
+
+Private (0600 files, 0700 directory) under `<pm store>/chatgpt-audit`: verdict cache, last report,
+bindings, `not_before`, notification log and the validation record.
+
+### Classifier route and capabilities
+
+Laya runs in the already-running task-cli classify server; pm never starts a model. A `predict`
+without a `model` field is answered by the ENGLISH checkpoint even on the newest socket, so the
+socket version says nothing about language support. pm therefore always sends an explicit
+`model` and `max_len`: any non-Latin-script letter (Cyrillic, Greek, CJK, ...) in the request or
+the final answer selects `multilingual` (`convaiinnovations/laya-multilingual`, `max_len` 2048),
+everything else selects `english` (`convaiinnovations/laya`, `max_len` 512, or 2048 for a long
+context). Before predicting, pm reads the read-only `op: capabilities` reply (cached for 60 s)
+and requires `api_version` 2, the route's entry, the official checkpoint id, `loaded: true` and a
+`max_len` window that contains the request. An old server (no `capabilities`), a missing route, a
+checkpoint mismatch or an out-of-range window is `unavailable`, and the text is NEVER silently
+routed to the other model. An unloaded route gets one content-free warm-up probe (the provider
+loads it in the background); that run is `unknown`, pm never waits for a download.
+
+The reply's `meta` is a TOP-LEVEL key beside `result` (a `result.meta` is not accepted). Every
+field (`api_version`, `model`, `checkpoint`, `max_len`, `truncated`, token counts) is type- and
+value-strict, must equal what was requested and must agree with `result.usage.truncated` /
+`state_tokens_dropped`. Missing accounting, a disagreement or a truncated input makes the call
+`invalid`, so the verdict is `unknown`, never `done`. A verdict is bound to the ACTUAL
+`checkpoint@max_len` of the validated reply, the prompt digest (`prompt_version`) and the decision
+threshold digest, not to the socket file name.
+
+Socket choice: `$PM_CHATGPT_AUDIT_LAYA_SOCKET` (an absolute path) wins and is never replaced by
+another socket; otherwise the highest-version private `laya-*.sock` under
+`$XDG_STATE_HOME/task-cli/classify`. Symlinks, foreign owners and group/world access are refused.
+The provider contract needs task-cli 0.23.1; until the runtime `task` CLI is updated from 0.23.0
+every classification is `unavailable` (so every model-dependent verdict is `unknown`).
+
+### Cache trust
+
+A cached verdict is reused by the collector only when fresh and it matches the prompt version,
+model identity (`checkpoint@max_len`), threshold digest and conversation fingerprint; otherwise the
+conversation is re-read. Entries record the native identifiers of the latest turn (`turn_ids`).
+
+### Validation gate and `auto_continue`
+
+Every report and conversation has `auto_continue`, always
+`{"allowed": false, "reason": "classification-not-validated"}` unless a matching passing validation
+record exists and the verdict fingerprint matches. `pm chatgpt audit bench` runs the fixed
+107-case corpus (tune + held-out splits) through the real warm Laya socket and exits 0 only when
+it passes (zero false `done` on both splits, zero held-out false `blocked`, held-out exact accuracy
+>= 75% and coverage >= 70%, so abstaining on everything cannot pass); `--record` writes
+`validation.json` ONLY for such a passing run, bound to the prompt digest, the checkpoint/window
+identities, the thresholds+logic digest and the corpus digest, so any change to one of them
+invalidates it. Exit 1 = ran but not validated, 2 = classifier unavailable (nothing recorded).
+pm still never sends; the owner-approved continuation policy above is unchanged.
+
+### Notifications
+
+`--notify` reports significant deltas only, through one-way owner-private
+`tg --automated --tag report`, with ids, URLs, states and reasons only. A `delivery_uncertain`
+delivery is never replayed; definite failures are retried under a cooldown.
+
+### Poller
+
+The approvals poller skips chats whose trusted fresh verdict is `done`, `working` or `blocked` with
+`task-finished`, `task-working` or `task-blocked`. A cached verdict suppresses ONLY when the row's
+rendered turn is one of the identifiers the verdict recorded (progress metadata can lag behind a
+new request, so timing alone proves nothing), and a `done` verdict additionally needs an `ok`
+classification whose validated, non-truncated route meta names the checkpoint and window the entry
+is bound to. Otherwise the cached verdict is ignored and the poller behaves as before (a
+proposal): doubt never becomes a silent `done`. Everything else is unchanged.
+
+### Units
+
+```
+pm chatgpt unit audit-service > ~/.config/systemd/user/pm-chatgpt-audit.service
+pm chatgpt unit audit-timer   > ~/.config/systemd/user/pm-chatgpt-audit.timer
+systemctl --user daemon-reload && systemctl --user enable --now pm-chatgpt-audit.timer
+```
+
+Both commands only print; pm never installs or enables a unit. The timer runs every 30 minutes
+(`OnCalendar=*:0/30`, `Persistent=false`; the oneshot service never overlaps itself and the run
+lock exits 75 when another audit is busy). Logs go to the journal (`journalctl --user -u
+pm-chatgpt-audit.service`), rate-limited. Optional per-user settings live in
+`~/.config/pm-chatgpt-audit/env`: `PM_AUDIT_TASK_LAUNCHER` (an ABSOLUTE path to the installed
+`task` launcher, default `~/.local/bin/task`; never a worktree path baked into the template),
+`PM_CHATGPT_AUDIT_LAYA_SOCKET` and `PM_AUDIT_PLAYWRIGHT_SITE_PACKAGES`. The service starts the warm
+Laya server best-effort with `task classify-server start` (the supported idempotent starter; it
+preloads the English model only, the multilingual model loads on the first routed request); pm
+itself never spawns a model. Exit codes 3, 4 and 75 do not mark the unit failed.
+
+### Validation results and limitations
+
+Real run (provider 0.23.1, both models loaded, 107 synthetic cases, `pm chatgpt audit bench
+--json`; full tables in [classifier-validation.md](../classifier-validation.md)). The hybrid
+pipeline (deterministic evidence and precedence + Laya) had ZERO false `done` and zero false
+`blocked` on both splits, but it is NOT validated and `auto_continue` stays denied: held-out exact
+52%, coverage 43% (abstention 57%), `done` recall 0% (the models rarely clear the 0.85 threshold,
+so decidable `done` cases end as `unknown`), `incomplete` precision 79% / recall 73%. The raw
+baselines a naive integration would ship are worse or unsafe: the four-way choice prompt had 5
+false `done` and 4 false `blocked` on held-out, the per-question prompt 16 false `blocked`. The
+earlier independent pilot (raw Laya 3/12 choice-correct, first pipeline 2/8 exact) is kept in
+the bench output as a documented counterexample. Only 8 of the 107 cases are routed to the
+multilingual model (per-route table in the report), so the multilingual numbers are indicative
+only. The two routes are different models with non-equivalent prompts/token budgets, and Laya's
+confidence numbers are entropy-like scores, not probabilities: the numbers are not comparable
+accuracy estimates and say nothing about general understanding.
+
+- `--workspace global` is an alias of `all` for the audit.
+- Project discovery is best-effort: when the project-list endpoint is unavailable (404) the scope
+  reason is `unverified` and the account is `partial`, never full coverage.
+- A model-dependent `done` needs the classifier to agree and the deterministic gates to hold; with
+  the provider unavailable, truncated, old (no `capabilities`) or the route unloaded, the verdict
+  is `unknown`.
+- Laya is advisory only; the audit never sends, resumes an archived chat, or approves anything.

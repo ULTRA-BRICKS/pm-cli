@@ -78,6 +78,24 @@ suite the design lists (privacy-aware fallback, kill-switch, crash-restart dedup
   (writes only QUEUE requests), the `tg-ctl ask --owner-only` approval worker (gated on
   `tg-ctl capabilities --json` listing `ask-owner-only-v1`, fail closed), poller and fixed connector.
   Stdlib-only; see `docs/commands/chatgpt.md`.
+- `pmlib/chatgpt_control/audit_*.py` — the read-only task-completion audit over the owned Guardian
+  browser (`pm chatgpt audit`); pure decision core, Laya advisory only, never sends. See
+  `docs/commands/chatgpt.md`. One module per concern:
+  - `audit_evidence` (typed `ConversationEvidence`/`MessageRef`), `audit_signals` (deterministic
+    text signals), `audit_native` (native read payload -> evidence; flat `messages` first, full
+    `mapping` fallback), `audit_urls` (same-origin endpoint builders, turn-window steps),
+    `audit_redact` (credential redaction before anything is stored/sent).
+  - `audit_decision` (the deterministic safety precedence -> `Verdict`; thresholds and logic
+    version), `audit_classifier` (the Laya socket client: explicit language route, capabilities,
+    strict top-level `meta` validation, checkpoint-bound model identity).
+  - `audit_reader`/`audit_browser` (reader contract and the CDP same-origin reader), `audit_guard`
+    (>=4s spacing, budget, 401/403/429 stop, persisted not-before), `audit_bindings` (account
+    binding), `audit_collector` (one audit run, incremental cache), `audit_store`/`audit_files`
+    (private cache, atomic files), `audit_report` (report + exit codes), `audit_notify`
+    (significant-delta Telegram summary, never replayed blindly).
+  - `audit_bench` + `bench/*.json` (the validation corpus and honest metrics), `audit_validation`
+    (the gate that keeps `auto_continue` denied until a passing record exists), `units/` (the
+    `pm-chatgpt-audit.service`/`.timer` templates, printed by `pm chatgpt unit`, never installed).
 - `pmlib/cli.py` + `pmlib/commands/*` — argparse dispatch + self-registering commands.
 
 ## Tests

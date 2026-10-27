@@ -15,14 +15,20 @@ continue request (answered, rejected, expired, unanswered) is never proposed aga
 ``delivery_unavailable`` request is retried, after a cooldown, because the owner saw no card.
 A running chat with no visible progress is REPORTED once and never continued. State survives a
 restart because every fact is read from the ledger.
+
+The audit cache is consulted read-only (``audit_store``): a trusted ``done``/``working``/``blocked``
+verdict suppresses the owner question; anything else, or any doubt, proposes as before. The poller
+cannot read the chat, so the cached fingerprint is NOT compared; instead Guardian telemetry must
+show no progress after the verdict was confirmed, a non-running row and a current observation.
 """
 
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 
 from ..chatgpt_monitor import ACCOUNTS
-from . import policy, service
+from . import audit_classifier, audit_decision, audit_store, audit_urls, policy, service
 from .errors import ApiError
 from .projection import ACTIVE, Projection
 from .schema import clean_text
@@ -31,6 +37,9 @@ from .service import Services
 MAX_PROPOSALS_PER_TICK = 2
 ACTIVE_PROPOSAL_CAP = 4
 DELIVERY_COOLDOWN_SECONDS = 900
+# The timer period is 30 min, so a verdict not re-confirmed within an hour is stale.
+AUDIT_VERDICT_MAX_AGE = 3600.0
+_AUDIT_SKIPS = {"done": "task-finished", "working": "task-working", "blocked": "task-blocked"}
 
 
 def _last_event_at(state) -> float:
@@ -95,7 +104,67 @@ def _report_stalled(services: Services, proj: Projection, account: str, row: dic
     }
 
 
-def poll_once(services: Services) -> dict:
+def default_expected_model() -> str:
+    """The model identities a cached verdict must come from; empty when the provider is down."""
+    return audit_classifier.LayaClassifier().profile()
+
+
+def _identity_proven(entry, row: dict) -> bool:
+    """A cached verdict may suppress only for the turn it was made for, on proven route meta.
+
+    Progress metadata can lag behind a new user request, so timing alone proves nothing: the row's
+    rendered turn must be one of the native identifiers the verdict recorded. A ``done`` verdict
+    additionally needs an ``ok`` classification whose validated, non-truncated route meta names
+    the same checkpoint and window as the model the entry was bound to.
+    """
+    turn = row.get("turn")
+    if not isinstance(turn, str) or turn not in entry.turn_ids:
+        return False
+    if entry.task_state != "done":
+        return True
+    verdict = entry.verdict
+    return verdict.get("classifier_status") == "ok" and audit_classifier.route_meta_matches(
+        verdict.get("classifier_meta"), entry.model
+    )
+
+
+def _audit_skip_reason(
+    services: Services, account: str, chat: str, row: dict, now: float, model: Callable[[], str]
+) -> str | None:
+    """Why a TRUSTED cached audit verdict says the owner must not be asked, else ``None``.
+
+    Every failure (unparseable URL, unreadable store, model lookup error) yields ``None``: the
+    verdict can only add caution, so doubt falls back to today's behaviour of a proposal.
+    """
+    try:
+        conversation_id = audit_urls.parse_chat_url(chat).conversation_id
+        store = audit_store.AuditStore(services.audit_dir)
+        if store.get(account, conversation_id) is None:
+            return None
+        entry = store.trusted(
+            account,
+            conversation_id,
+            now=now,
+            prompt_version=audit_classifier.PROMPT_VERSION,
+            model=model(),
+            thresholds_digest=audit_decision.thresholds_digest(audit_decision.DEFAULT_THRESHOLDS),
+            max_age=AUDIT_VERDICT_MAX_AGE,
+            fingerprint=None,
+        )
+    except Exception:  # noqa: BLE001 - a broken cache must never change what the poller does
+        return None
+    if entry is None or row.get("running") is not False or row.get("observation") != "current":
+        return None
+    if not _identity_proven(entry, row):
+        return None
+    progress = row.get("last_progress_at")
+    if type(progress) in (int, float) and progress > entry.verified_at:
+        return None
+    return _AUDIT_SKIPS.get(entry.task_state)
+
+
+def poll_once(services: Services, expected_model: Callable[[], str] | None = None) -> dict:
+    model = expected_model or default_expected_model
     now = services.clock()
     report: dict = {
         "proposed": [],
@@ -139,6 +208,9 @@ def poll_once(services: Services) -> dict:
             continue
         if _chat_busy(proj, account, chat):
             skip("chat-busy")
+            continue
+        if audit_reason := _audit_skip_reason(services, account, chat, row, now, model):
+            skip(audit_reason)
             continue
         open_proposals = sum(
             s.status in ACTIVE and s.source == "poller" for s in proj.requests.values()

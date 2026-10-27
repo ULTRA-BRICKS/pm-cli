@@ -1,0 +1,22 @@
+# Template timer for pm-chatgpt-audit.service. NOT installed by pm.
+# Install: copy both files to ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now pm-chatgpt-audit.timer
+# Verify: systemctl --user list-timers pm-chatgpt-audit.timer
+#         journalctl --user -u pm-chatgpt-audit.service --lines 50 --no-pager
+# Rollback: systemctl --user disable --now pm-chatgpt-audit.timer
+# This timer replaces the temporary guardian-halfhour-check.timer; main disables/replaces that
+# one ONLY after main has verified this timer.
+[Unit]
+Description=pm ChatGPT task-completion audit every 30 minutes
+Documentation=https://git.hyperide.ai/ultrabricks/pm-cli
+
+[Timer]
+OnCalendar=*:0/30
+# No catch-up storm after sleep or boot.
+Persistent=false
+AccuracySec=1min
+Unit=pm-chatgpt-audit.service
+
+[Install]
+WantedBy=timers.target

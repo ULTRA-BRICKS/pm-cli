@@ -11,6 +11,7 @@ Non-follow journal pipes belong to pm so a stalled reader cannot hold caller out
 from __future__ import annotations
 
 import argparse
+import math
 import subprocess
 import sys
 
@@ -52,7 +53,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
         choices=(*ACCOUNTS, "all"),
         default=None,
         help="Guardian account scope (default: home; the interactive TUI defaults to all). "
-        "'all' is accepted only by monitor, tui and accounts.",
+        "'all' is accepted only by monitor, tui, accounts and audit.",
     )
     parser.add_argument("--state", help="Shared Guardian database (otherwise Guardian's default).")
     subs = parser.add_subparsers(dest="guardian_action")
@@ -71,6 +72,7 @@ def configure(parser: argparse.ArgumentParser) -> None:
         configure_monitor(monitor)
     subs.add_parser("status", help="Observe status; no recovery sends.", allow_abbrev=False)
     _configure_control(subs)
+    _configure_audit(subs)
     logs = subs.add_parser(
         "logs",
         help="Read the fixed workspace user-service journal.",
@@ -175,10 +177,99 @@ def _configure_control(subs) -> None:
     unit = subs.add_parser(
         "unit", help="Print a systemd user unit template (not installed).", allow_abbrev=False
     )
-    unit.add_argument("which", choices=("api", "worker"))
+    unit.add_argument("which", choices=("api", "worker", "audit-service", "audit-timer"))
 
 
-_CONTROL = {"api", "mcp", "approvals", "connector", "unit"}
+def _days(value: str) -> float:
+    try:
+        days = float(value)
+    except ValueError:
+        days = math.nan
+    if not math.isfinite(days) or not 0 < days <= 60:
+        raise argparse.ArgumentTypeError("--days must be a number above 0 and at most 60.")
+    return days
+
+
+def _turns(value: str) -> int:
+    try:
+        turns = int(value)
+    except ValueError:
+        turns = 0
+    if not 1 <= turns <= 50:
+        raise argparse.ArgumentTypeError("--turns must be an integer from 1 to 50.")
+    return turns
+
+
+def _configure_audit(subs) -> None:
+    """Semantic task-completion audit; reads only, never writes to ChatGPT."""
+    audit = subs.add_parser(
+        "audit",
+        help="Audit whether ChatGPT conversations finished their task (read-only).",
+        description="Read recent conversations through the owned, already-logged-in browser and "
+        "classify each as done, incomplete, blocked, working or unknown. Reads only: nothing is "
+        "sent, resumed, unarchived or opened. Exit 0 = every account fully audited, 3 = partial, "
+        "4 = an account unavailable, 75 = another audit is running, 2 = usage error.",
+        allow_abbrev=False,
+    )
+    audit.add_argument(
+        "--workspace",
+        dest="audit_workspace",
+        choices=(*ACCOUNTS, "all", "global"),
+        default=None,
+        help="Account to audit (default: all; 'global' is an alias of 'all').",
+    )
+    audit.add_argument(
+        "--days", type=_days, default=14.0, help="Window in days, above 0 and at most 60 (14)."
+    )
+    audit.add_argument(
+        "--turns",
+        type=_turns,
+        default=4,
+        help="Turns requested per chat read, 1-50 (4); a bare 'go' is re-read with 8, then 16.",
+    )
+    audit.add_argument(
+        "--json", dest="audit_json", action="store_true", help="One bounded JSON report."
+    )
+    audit.add_argument(
+        "--notify", action="store_true", help="Send a deduplicated Telegram summary afterwards."
+    )
+    audit.add_argument(
+        "--include-text",
+        action="store_true",
+        help="Add each chat's short remaining-steps list (never the chat text itself).",
+    )
+    audit.add_argument(
+        "--playwright-site-packages",
+        metavar="DIR",
+        default=None,
+        help="Directory providing the playwright package when it is not importable.",
+    )
+    actions = audit.add_subparsers(dest="audit_action")
+    bench = actions.add_parser(
+        "bench",
+        help="Run the classifier validation benchmark.",
+        allow_abbrev=False,
+    )
+    bench.add_argument(
+        "--record", dest="bench_record", action="store_true", help="Persist a passing result."
+    )
+    bench.add_argument("--json", dest="bench_json", action="store_true", help="JSON result.")
+    bind = actions.add_parser(
+        "bind",
+        help="Record which account the owned browser session is logged into.",
+        allow_abbrev=False,
+    )
+    bind.add_argument("--workspace", dest="bind_workspace", choices=ACCOUNTS, required=True)
+    bind.add_argument(
+        "--playwright-site-packages",
+        dest="bind_playwright_site_packages",
+        metavar="DIR",
+        default=None,
+        help="Directory providing the playwright package when it is not importable.",
+    )
+
+
+_CONTROL = {"api", "mcp", "approvals", "connector", "unit", "audit"}
 
 
 def _run_control(args: argparse.Namespace) -> int:
@@ -194,6 +285,8 @@ def _run_control(args: argparse.Namespace) -> int:
     if action == "connector":
         args.connector_action = args.connector_action or "status"
         return cli.run_connector(args)
+    if action == "audit":
+        return cli.run_audit_command(args)
     return cli.run_unit(args)
 
 
@@ -433,7 +526,7 @@ def run(args: argparse.Namespace) -> int:
         return run_accounts(args)
     if args.workspace == "all":
         print(
-            "error: --workspace all is only for monitor, tui and accounts; "
+            "error: --workspace all is only for monitor, tui, accounts and audit; "
             "choose home or glide.vc for this command.",
             file=sys.stderr,
         )

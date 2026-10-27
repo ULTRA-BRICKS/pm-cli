@@ -1,0 +1,69 @@
+# Template for the ChatGPT task-completion audit run. NOT installed by pm: copy this file and
+# pm-chatgpt-audit.timer to ~/.config/systemd/user/, then
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now pm-chatgpt-audit.timer
+# The timer is the entry point; this oneshot service has no [Install] section. It replaces the
+# temporary guardian-halfhour-check.timer, which main disables/replaces ONLY after main has
+# verified this timer.
+# The audit is read-only: it never sends to ChatGPT, opens no tab and starts no model.
+# Optional settings go in ~/.config/pm-chatgpt-audit/env (one KEY=value per line; the file is
+# optional and never created by pm):
+#   PM_AUDIT_TASK_LAUNCHER=/abs/path/to/task    the installed `task` launcher used to warm the
+#       Laya server (default: ~/.local/bin/task). Must be absolute; a worktree path is never baked
+#       into this template.
+#   PM_CHATGPT_AUDIT_LAYA_SOCKET=/abs/path/laya-X.sock   use exactly this private socket instead of
+#       the highest-version laya-*.sock under ~/.local/state/task-cli/classify.
+#   PM_AUDIT_PLAYWRIGHT_SITE_PACKAGES=/path/to/site-packages   for setups where the pm entry point
+#       does not already run under Guardian's venv python (where Playwright is importable). The
+#       directory must be user-owned and not group/world-writable.
+# The audit sends every classification to the explicit model route that matches its text
+# (Cyrillic or any other non-Latin script -> multilingual, otherwise english) and needs a
+# task-cli provider that speaks api_version 2 (task 0.23.1+). With the older 0.23.0 runtime the
+# capabilities probe fails and every verdict is `unknown` (never `done`) until the provider is
+# updated.
+[Unit]
+Description=pm ChatGPT task-completion audit (read-only, all workspaces)
+Documentation=https://git.hyperide.ai/ultrabricks/pm-cli
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=-%h/.config/pm-chatgpt-audit/env
+# Supported idempotent starter for the warm Laya server (`task classify-server start` prints the
+# socket path once the server accepts connections). systemd cannot take the program name from a
+# variable, so a tiny shell resolves the configured absolute launcher. The leading '-' lets the
+# audit run even if the start fails; it then reports the classifier as unavailable. A cold start
+# can exceed the starter's own 60 s wait; the audit itself waits up to 150 s for the socket before
+# its first classification. The server idles out after 900 s, so every 30 min run normally
+# cold-starts it. An unloaded multilingual model is only asked to start loading by one
+# content-free probe; pm itself never spawns a model or waits for a download. ('$$' is systemd's
+# escape for a literal '$'.)
+ExecStartPre=-/bin/sh -c 'launcher="$${PM_AUDIT_TASK_LAUNCHER:-$$HOME/.local/bin/task}"; case "$$launcher" in /*) ;; *) echo "PM_AUDIT_TASK_LAUNCHER must be an absolute path" >&2; exit 1;; esac; exec "$$launcher" classify-server start'
+ExecStart=%h/.local/bin/pm chatgpt audit --workspace all --days 14 --json --notify
+# A oneshot unit never overlaps itself; the in-code flock exits 75 when another audit is busy.
+Restart=no
+# 3 = partial coverage, 4 = an account unavailable: both are fully reported in the JSON and via
+# --notify, so the unit is not marked failed. 75 = run lock busy.
+SuccessExitStatus=3 4 75
+RestartPreventExitStatus=75
+# Audit read budget is 20 min and the timer period is 30 min.
+TimeoutStartSec=1680
+TimeoutStopSec=30
+# pm caps its own output; these bound the journal further.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pm-chatgpt-audit
+LogRateLimitIntervalSec=30min
+LogRateLimitBurst=40
+UMask=0077
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full
+# Needs: home state dirs, loopback TCP to the owned CDP browsers, the Laya unix socket under
+# $XDG_STATE_HOME, and outbound network for tg.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+ProtectKernelTunables=true
+ProtectControlGroups=true

@@ -27,7 +27,7 @@ def test_distribution_name_is_the_pypi_one() -> None:
 
 
 def test_release_version() -> None:
-    assert PROJECT["version"] == "0.7.0"
+    assert PROJECT["version"] == "0.8.0"
 
 
 def test_source_version_wins_over_stale_install(tmp_path, monkeypatch) -> None:

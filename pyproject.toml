@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hyper-pm"
-version = "0.7.0"
+version = "0.8.0"
 description = "pm — autonomous project-manager coordinator: an event-sourced work queue over the task/tg/rig ecosystem (agent-tools research #255)."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,7 +29,9 @@ Homepage = "https://git.hyperide.ai/ultrabricks/pm-cli"
 include = ["pmlib*"]
 
 [tool.setuptools.package-data]
-"pmlib.chatgpt_control" = ["units/*.service"]
+"pmlib.chatgpt_control" = ["units/*.service", "units/*.timer"]
+# The validation corpus ships with pm: the validation gate recomputes its digest at audit time.
+"pmlib.chatgpt_control.bench" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

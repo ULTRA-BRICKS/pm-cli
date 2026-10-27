@@ -67,6 +67,9 @@ pm sprint close <sprint_id>
 pm sprint retro <sprint_id> [--note <text>] [--json]   # record a note, or view with no --note
 pm sprint list [--json]
 pm chatgpt [--workspace home|glide.vc] [--state <db>] [status]  # observe existing Guardian
+pm chatgpt audit [--workspace home|glide.vc|all] [--days N] [--json] [--notify]  # read-only task-completion audit
+pm chatgpt audit bench [--record] [--json]     # honest classifier validation (needs the warm Laya server)
+pm chatgpt unit audit-service|audit-timer      # print the 30-minute systemd timer templates (never installed)
 pm doctor                                      # store writability + FSM integrity
 pm version
 ```
