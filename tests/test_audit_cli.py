@@ -213,6 +213,24 @@ def test_a_notify_failure_never_loses_the_report_or_changes_the_exit_code(tmp_pa
     assert r.store.last_report()["notify"] == {"outcome": "error"}
 
 
+@pytest.mark.parametrize("outcome", ["error", "busy"])
+def test_a_claim_that_failed_before_sending_leaves_the_delta_eligible_next_run(
+    tmp_path, capsys, outcome
+):
+    r = two_account_rig(tmp_path)
+    seen = []
+
+    def notify(report, previous, store, *, now, send=None):
+        seen.append(previous)
+        return {"outcome": outcome} if len(seen) == 1 else {"outcome": "sent"}
+
+    r.store.put_report({"schema": 1, "marker": "previous"})
+    cli.run_audit(parse("audit", "--json", "--notify"), env=r.env, notify=notify)
+    cli.run_audit(parse("audit", "--json", "--notify"), env=r.env, notify=notify)
+    assert seen[0] == {"schema": 1, "marker": "previous"}
+    assert seen[1] is None  # nothing was sent, so the whole report is still new to the owner
+
+
 def test_without_notify_the_notifier_is_not_called(tmp_path):
     r = two_account_rig(tmp_path)
 

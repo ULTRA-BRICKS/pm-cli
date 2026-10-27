@@ -200,7 +200,13 @@ def _notify(report: dict, env, notify) -> dict:
     try:
         if notify is None:
             notify = importlib.import_module(f"{__package__}.audit_notify").notify_report
-        result = notify(report, env.store.last_report(), env.store, now=env.clock())
+        previous = env.store.last_report()
+        if isinstance(previous, dict) and (previous.get("notify") or {}).get("outcome") in (
+            "busy",
+            "error",
+        ):
+            previous = None  # that run sent nothing, so its deltas are still new to the owner
+        result = notify(report, previous, env.store, now=env.clock())
         if not isinstance(result, dict):
             raise TypeError("notify result must be an object")
         json.dumps(result, allow_nan=False)
