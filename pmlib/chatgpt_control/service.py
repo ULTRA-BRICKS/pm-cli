@@ -23,6 +23,7 @@ from pathlib import Path
 from ..store import resolve_store_dir
 from . import policy
 from .errors import ApiError
+from .guardian_client import GuardianConfig, GuardianUnavailable
 from .ledger import Ledger
 from .projection import ACTIVE, Projection, RequestState, project
 from .schema import clean_text
@@ -193,6 +194,11 @@ def submit_action(services: Services, params: dict, source: str = "api") -> dict
     """Queue one owner-approval request for a validated ``actions.request`` params object."""
     action, account, chat = params["action"], params["workspace"], params["chat"]
     turn = params["expected_turn"]
+    if action == policy.CONTINUE:
+        try:
+            GuardianConfig().check_state_override(account)
+        except GuardianUnavailable as exc:
+            raise ApiError("refused", str(exc)) from None
     if action != policy.CONTINUE or turn is not None:
         digest = policy.plan_digest(account, chat, turn, action)
         prior = _prior_receipt(

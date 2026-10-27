@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pmlib.events import EventKind, new_event
 from pmlib.projection import build_intake_ledger, build_projection
 from pmlib.reports import monthly_report, queue_report, retro_report, stuck_report
 from pmlib.states import default_machine
 
-NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
 NOW_TS = NOW.strftime("%Y-%m-%dT%H:%M:%S.%fZ")  # matches events.py's _utc_now_iso() format
 M = default_machine()
 

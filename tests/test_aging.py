@@ -7,14 +7,14 @@ states (and deployed) do not.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pmlib.model import Transition, WorkItem
 from pmlib.reminders import DEFAULT_NO_PROGRESS_SECONDS
 from pmlib.reports import aging_report, current_state_age_seconds
 from pmlib.states import StateMachine, WorkStateCategory, WorkStateDefinition, default_machine
 
-NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
 M = default_machine()
 
 

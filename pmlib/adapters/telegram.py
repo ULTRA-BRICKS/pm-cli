@@ -88,5 +88,6 @@ def fetch_tg_records(since: str = "") -> list[dict]:
         raise RuntimeError(f"`tg replies` failed (exit {proc.returncode}): {proc.stderr.strip()}")
     data = json.loads(proc.stdout or "[]")
     if not isinstance(data, list):
-        raise RuntimeError("`tg replies --json` did not return a JSON array")
+        # Malformed external output follows the adapter's documented operational-error contract.
+        raise RuntimeError("`tg replies --json` did not return a JSON array")  # noqa: TRY004
     return [r for r in data if isinstance(r, dict)]

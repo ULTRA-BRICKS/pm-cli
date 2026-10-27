@@ -13,8 +13,8 @@ import sys
 
 from ..executors import recommend_routing
 from ..states import default_machine
-from .executors import load_executors
 from ._shared import load_items, open_store
+from .executors import load_executors
 
 NAME = "route"
 HELP = "recommend an executor for work items (read-only; dispatches nothing)"

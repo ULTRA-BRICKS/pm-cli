@@ -89,6 +89,18 @@ def check_body(body: object) -> dict:
     return dict(body)
 
 
+def _check_state_override(account: str, state: Path, override: str) -> None:
+    """Telemetry's environment override cannot select a different deployment database."""
+    try:
+        matches = Path(override).expanduser().resolve() == state.resolve()
+    except (OSError, RuntimeError, ValueError):
+        matches = False
+    if not matches:
+        raise GuardianUnavailable(
+            f"{account} state override does not match the configured Guardian deployment"
+        )
+
+
 class GuardianConfig:
     """Resolves each account's loopback port and bearer token from its own Guardian state path."""
 
@@ -101,8 +113,7 @@ class GuardianConfig:
             raise ValueError("unsupported account")
         return self._ports[account]
 
-    def read_token(self, account: str) -> str:
-        """The account's bearer token; raises ``GuardianUnavailable`` without revealing it."""
+    def _state_path(self, account: str) -> Path:
         self.port(account)
         config = self._home / ".config/agent-tools/chatgpt-guardian" / f"{account}.json"
         try:
@@ -118,7 +129,21 @@ class GuardianConfig:
             or not os.path.isabs(state)
         ):
             raise GuardianUnavailable(f"{account} Guardian workspace configuration is invalid")
-        token_path = Path(state).parent / "control.token"
+        return Path(state)
+
+    def check_state_override(self, account: str) -> None:
+        """Check a supplied telemetry override without reading credentials or changing it."""
+        override = os.environ.get("CHATGPT_GUARDIAN_STATE")
+        if override:
+            _check_state_override(account, self._state_path(account), override)
+
+    def read_token(self, account: str) -> str:
+        """The account's bearer token; raises ``GuardianUnavailable`` without revealing it."""
+        state = self._state_path(account)
+        override = os.environ.get("CHATGPT_GUARDIAN_STATE")
+        if override:
+            _check_state_override(account, state, override)
+        token_path = state.parent / "control.token"
         try:
             fd = os.open(token_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
         except OSError:

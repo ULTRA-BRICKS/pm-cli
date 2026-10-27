@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -48,8 +49,8 @@ def test_report_monthly_json(pm_home: Path, capsys) -> None:
     _seed(["classified"])
     capsys.readouterr()
     # use the current month so the intake/transition fall in-range
-    from datetime import datetime, timezone
-    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    from datetime import datetime
+    month = datetime.now(UTC).strftime("%Y-%m")
     assert _run("report", "monthly", "--month", month, "--json") == 0
     rep = json.loads(capsys.readouterr().out)
     assert "product" in rep["groups"] and "process" in rep["groups"]

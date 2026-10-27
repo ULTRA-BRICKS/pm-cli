@@ -149,9 +149,9 @@ def _eligible(executor: Executor, tier: str) -> bool:
         return False
     if executor.context_pressure is not None and executor.context_pressure > _MAX_CONTEXT_PRESSURE:
         return False
-    if executor.limit_remaining is not None and executor.limit_remaining < _HEADROOM[tier]:
-        return False
-    return True
+    return not (
+        executor.limit_remaining is not None and executor.limit_remaining < _HEADROOM[tier]
+    )
 
 
 def _rank(executors: list[Executor], tier: str) -> list[Executor]:

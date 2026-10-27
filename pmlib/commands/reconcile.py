@@ -169,7 +169,8 @@ def _pr_facts_from_file(args: argparse.Namespace) -> dict[str, dict]:
 
     data = json.loads(pathlib.Path(args.from_file).read_text(encoding="utf-8"))
     if not isinstance(data, list):
-        raise ValueError(f"{args.from_file}: expected a JSON array of fact records")
+        # The CLI maps invalid input files to exit 2 through its public ValueError boundary.
+        raise ValueError(f"{args.from_file}: expected a JSON array of fact records")  # noqa: TRY004
     return {str(r["item_id"]): r for r in data if isinstance(r, dict) and r.get("item_id")}
 
 
@@ -178,7 +179,8 @@ def _rig_health_from_file(args: argparse.Namespace) -> HealthStatus:
 
     data = json.loads(pathlib.Path(args.from_file).read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError(f"{args.from_file}: expected a JSON object")
+        # The CLI maps invalid input files to exit 2 through its public ValueError boundary.
+        raise ValueError(f"{args.from_file}: expected a JSON object")  # noqa: TRY004
     return interpret_rig_status(
         int(data.get("returncode", 0)), str(data.get("stdout", "")), str(data.get("stderr", ""))
     )

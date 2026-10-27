@@ -9,7 +9,7 @@ Pure: clock passed in.
 from __future__ import annotations
 
 import html
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from .reminders import parse_iso
@@ -111,7 +111,7 @@ def main() -> int:
     m = machine()
     events = store.read_all()
     items = load_items(store, m)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     print(weekly_digest_html(items, events, m, now))
     return 0
 

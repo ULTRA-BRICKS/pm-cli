@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 class EventKind(str):
@@ -100,7 +100,7 @@ EventKind.ALL = _Kinds.ALL
 
 def _utc_now_iso() -> str:
     """UTC now as ISO-8601 with a trailing ``Z`` (stable, timezone-explicit, sortable)."""
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 @dataclass(frozen=True)
@@ -128,7 +128,7 @@ class Event:
         )
 
     @classmethod
-    def from_json(cls, line: str) -> "Event":
+    def from_json(cls, line: str) -> Event:
         """Parse one JSONL record. Raises ``ValueError``/``KeyError`` on a malformed line."""
         raw = json.loads(line)
         return cls(

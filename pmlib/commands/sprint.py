@@ -22,7 +22,6 @@ from ..projection import build_projection
 from ..sprint import STATUS_ACTIVE, STATUS_CLOSED, STATUS_PLANNING, Sprint, build_sprint_projection
 from ._shared import display_safe, machine, open_store
 
-
 NAME = "sprint"
 HELP = "create/plan/start/status/close/retro a sprint"
 

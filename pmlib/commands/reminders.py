@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..projection import build_projection
 from ..reminders import compute_reminders, compute_sprint_reminders
@@ -30,7 +30,7 @@ def run(args: argparse.Namespace) -> int:
     m = machine()
     events = open_store().read_all()
     items = build_projection(events, m)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     reminders = compute_reminders(items, m, now)
     reminders += compute_sprint_reminders(build_sprint_projection(events), items, m, now)
     reminders.sort(key=lambda r: (r.kind, r.item_id, r.target_id))

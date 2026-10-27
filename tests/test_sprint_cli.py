@@ -347,14 +347,14 @@ def test_concurrent_add_and_start_never_silently_drops_a_reported_success(
 
         results: dict[str, int] = {}
 
-        def _do_add() -> None:
-            results["add"] = _run("sprint", "add", sid, "w2")
+        def _do_add(trial_results: dict[str, int], sprint_id: str) -> None:
+            trial_results["add"] = _run("sprint", "add", sprint_id, "w2")
 
-        def _do_start() -> None:
-            results["start"] = _run("sprint", "start", sid)
+        def _do_start(trial_results: dict[str, int], sprint_id: str) -> None:
+            trial_results["start"] = _run("sprint", "start", sprint_id)
 
-        t_add = threading.Thread(target=_do_add)
-        t_start = threading.Thread(target=_do_start)
+        t_add = threading.Thread(target=_do_add, args=(results, sid))
+        t_start = threading.Thread(target=_do_start, args=(results, sid))
         t_add.start()
         t_start.start()
         t_add.join()

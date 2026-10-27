@@ -13,7 +13,7 @@ def test_new_event_generates_id_and_timestamp() -> None:
     ev = new_event(EventKind.INTAKE, "w1", {"title": "hi"})
     assert ev.id and isinstance(ev.id, str)
     assert ev.ts.endswith("Z")  # UTC ISO-8601
-    datetime.fromisoformat(ev.ts.replace("Z", "+00:00"))  # parses back — pins the format
+    datetime.fromisoformat(ev.ts)  # parses back — pins the format
     assert ev.kind == EventKind.INTAKE
     assert ev.item_id == "w1"
     assert ev.payload == {"title": "hi"}

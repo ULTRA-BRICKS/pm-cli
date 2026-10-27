@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pmlib.model import DependencyEdge, TimerRef, WorkItem
 from pmlib.reminders import compute_reminders
 from pmlib.states import StateMachine, WorkStateCategory, WorkStateDefinition, default_machine
 
-NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
 
 
 def _wi(iid: str, state: str = "implementing", updated: datetime | None = None,

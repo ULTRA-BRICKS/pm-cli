@@ -6,13 +6,13 @@ Re-entries accumulate: stuck -> ready -> stuck sums both exception visits on the
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pmlib.model import Transition, WorkItem
 from pmlib.reports import metrics_report
 from pmlib.states import default_machine
 
-NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
 M = default_machine()
 
 

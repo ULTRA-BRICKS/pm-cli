@@ -157,7 +157,8 @@ def fetch_task_records(cwd: str = "") -> list[dict]:
         raise RuntimeError(f"`task list` failed (exit {proc.returncode}): {proc.stderr.strip()}")
     data = json.loads(proc.stdout or "[]")
     if not isinstance(data, list):
-        raise RuntimeError("`task list --json` did not return a JSON array")
+        # Malformed external output follows the adapter's documented operational-error contract.
+        raise RuntimeError("`task list --json` did not return a JSON array")  # noqa: TRY004
     return flatten_records(data)
 
 

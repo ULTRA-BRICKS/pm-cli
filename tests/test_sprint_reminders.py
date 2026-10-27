@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from pmlib.model import WorkItem
 from pmlib.reminders import compute_sprint_reminders
 from pmlib.sprint import Sprint, SprintItem
 from pmlib.states import default_machine
 
-NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 7, 14, 12, 0, 0, tzinfo=UTC)
 
 
 def _fire(sprints: dict, items: dict | None = None, now: datetime = NOW) -> set:

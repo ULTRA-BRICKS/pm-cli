@@ -101,7 +101,8 @@ def _load_file(args: argparse.Namespace) -> list[dict]:
 
     data = json.loads(pathlib.Path(args.from_file).read_text(encoding="utf-8"))
     if not isinstance(data, list):
-        raise ValueError(f"{args.from_file}: expected a JSON array of records")
+        # The CLI maps invalid input files to exit 2 through its public ValueError boundary.
+        raise ValueError(f"{args.from_file}: expected a JSON array of records")  # noqa: TRY004
     return [r for r in data if isinstance(r, dict)]
 
 

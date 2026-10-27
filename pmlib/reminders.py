@@ -25,7 +25,7 @@ Pure: no I/O, no clock of its own (``now`` is passed in), so it is deterministic
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from .sprint import STATUS_ACTIVE, STATUS_CLOSED, STATUS_PLANNING
@@ -294,4 +294,4 @@ def parse_iso(value: str) -> datetime | None:
         dt = datetime.fromisoformat(text)
     except ValueError:
         return None
-    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    return dt.replace(tzinfo=UTC) if dt.tzinfo is None else dt

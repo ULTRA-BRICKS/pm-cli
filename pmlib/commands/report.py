@@ -10,10 +10,18 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from ..projection import build_intake_ledger
-from ..reports import Report, aging_report, metrics_report, monthly_report, queue_report, retro_report, stuck_report
+from ..reports import (
+    Report,
+    aging_report,
+    metrics_report,
+    monthly_report,
+    queue_report,
+    retro_report,
+    stuck_report,
+)
 from ._shared import load_items, machine, open_store
 
 NAME = "report"
@@ -37,7 +45,7 @@ def run(args: argparse.Namespace) -> int:
     m = machine()
     events = store.read_all()
     items = load_items(store, m)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     report = _build(args, events, items, m, now)
     if args.json:
         print(json.dumps(report.to_dict(), ensure_ascii=False))

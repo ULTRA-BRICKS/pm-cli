@@ -46,9 +46,8 @@ try:  # POSIX (macOS/Linux) -- the primary target
     def _unlock(fh) -> None:
         fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 except ImportError:  # Windows has no fcntl -- fall back to msvcrt's byte-range lock
-    import time
-
     import msvcrt
+    import time
 
     def _lock_exclusive(fh) -> None:
         # msvcrt locks a byte range starting at the current position, not the whole file;

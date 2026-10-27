@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from .labels import pm_health
@@ -222,7 +222,7 @@ def _percentile(values: list[int], p: float) -> int:
     if lo_i == hi_i:
         return int(xs[int(k)])
     lo, hi = xs[lo_i], xs[hi_i]
-    return int(round(lo + (hi - lo) * (k - lo_i)))
+    return round(lo + (hi - lo) * (k - lo_i))
 
 
 def metrics_report(items: dict[str, WorkItem], machine: StateMachine, now: datetime) -> Report:
@@ -241,7 +241,7 @@ def metrics_report(items: dict[str, WorkItem], machine: StateMachine, now: datet
             label=cat.value,
             count=len(vals),
             item_ids=sorted(by_item),
-            mean_seconds=int(round(sum(vals) / len(vals))),
+            mean_seconds=round(sum(vals) / len(vals)),
             p50_seconds=_percentile(vals, 0.5),
             p90_seconds=_percentile(vals, 0.9),
         ))
@@ -331,8 +331,8 @@ def _month_end(month: str) -> datetime:
     """
     try:
         year, mon = (int(part) for part in month.split("-", 1))
-        first_next = (datetime(year + 1, 1, 1, tzinfo=timezone.utc) if mon == 12
-                      else datetime(year, mon + 1, 1, tzinfo=timezone.utc))
+        first_next = (datetime(year + 1, 1, 1, tzinfo=UTC) if mon == 12
+                      else datetime(year, mon + 1, 1, tzinfo=UTC))
     except (ValueError, TypeError):
-        return datetime.now(timezone.utc)
+        return datetime.now(UTC)
     return first_next - timedelta(seconds=1)

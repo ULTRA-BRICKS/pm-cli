@@ -92,7 +92,8 @@ def _process_one(intake: IntakeEvent, processor: Processor) -> list[Event]:
     try:
         payload = processor(intake)
         work_item_id = _require_work_item_id(payload)  # validate INSIDE the guard
-    except Exception as exc:  # a processing failure (or a malformed payload) is retryable, not fatal
+    # User-supplied processors may raise any normal exception; each must become a retry/DLQ event.
+    except Exception as exc:  # noqa: BLE001 - processor failure boundary; interrupts still propagate
         return [_failure_event(intake, str(exc) or exc.__class__.__name__)]
     return [
         new_event(EventKind.INTAKE, "", payload),  # the WorkItem is born

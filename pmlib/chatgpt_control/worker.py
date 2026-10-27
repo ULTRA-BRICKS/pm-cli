@@ -26,7 +26,7 @@ from collections.abc import Callable
 
 from ..chatgpt_tui import Action, revalidate
 from . import connector, policy
-from .guardian_client import GuardianUnavailable, GuardianUncertain
+from .guardian_client import GuardianConfig, GuardianUnavailable, GuardianUncertain
 from .projection import RequestState, project
 from .schema import clean_text
 from .service import Services
@@ -140,6 +140,11 @@ class Worker:
             return policy.Decision(False, "plan-digest-mismatch")
         if state.action == "service-stop":
             return policy.Decision(True)
+        if state.action == policy.CONTINUE:
+            try:
+                GuardianConfig().check_state_override(state.account)
+            except GuardianUnavailable:
+                return policy.Decision(False, "state-scope-mismatch")
         data = self._fetch(state.account)
         entries = [
             a for a in (data or {}).get("accounts", []) if a.get("workspace") == state.account
