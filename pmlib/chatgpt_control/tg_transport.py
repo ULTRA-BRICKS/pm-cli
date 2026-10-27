@@ -156,8 +156,8 @@ def _run_bounded(
 ) -> subprocess.CompletedProcess:
     """Run ``argv`` keeping at most ``CAPABILITY_MAX_BYTES + 1`` bytes of stdout.
 
-    A child that outgrows the cap or the deadline is killed, so a hostile or broken tg-ctl can
-    never make pm buffer unbounded output. Oversize output is returned (one byte past the cap)
+    The capability-probe child is killed if it outgrows the cap or deadline, so this probe
+    never buffers unbounded output. Oversize output is returned (one byte past the cap)
     for the caller to reject; a deadline raises ``subprocess.TimeoutExpired``.
     """
     deadline = time.monotonic() + timeout

@@ -4,8 +4,8 @@ Accessed via: ``runner`` (``pm chatgpt approvals run``), once per interval.
 
 A completed answer is not a completed task, so the poller only PROPOSES: it queues one
 owner-approval request per account/chat/turn when the chat is enrolled, present, observed
-currently, non-generating (``complete`` or ``unknown``), blocker-free, with a known model and
-effort, and has been quiet for at least ``QUIET_SECONDS`` (Guardian's ``last_progress_at``, which
+currently, non-generating (``complete`` or ``unknown``), blocker-free, and has been quiet for
+at least ``QUIET_SECONDS`` (Guardian's ``last_progress_at``, which
 survives pm restarts). The very same ``policy.evaluate_continue`` that guards execution decides.
 
 Invariants: nothing is proposed for active generation, missing/stale/ambiguous evidence, a

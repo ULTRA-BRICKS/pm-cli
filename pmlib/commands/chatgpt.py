@@ -182,6 +182,13 @@ _CONTROL = {"api", "mcp", "approvals", "connector", "unit"}
 
 
 def _run_control(args: argparse.Namespace) -> int:
+    if args.workspace is not None or args.state is not None:
+        print(
+            "error: --workspace/--state do not select accounts for control-plane commands; "
+            "omit them and use the API or MCP workspace parameter when supported.",
+            file=sys.stderr,
+        )
+        return 2
     from ..chatgpt_control import cli
 
     action = args.guardian_action

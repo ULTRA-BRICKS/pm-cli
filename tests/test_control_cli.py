@@ -136,6 +136,33 @@ def test_unit_templates_are_printed_not_installed(capsys):
 # --- real process seam -------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    "selector",
+    [
+        ("--workspace", "home"),
+        ("--workspace", "glide.vc"),
+        ("--workspace", "all"),
+        ("--state", "/not-the-selected-account.sqlite"),
+    ],
+)
+@pytest.mark.parametrize(
+    "command",
+    [
+        ("api", "sessions.list", "--params", "{}"),
+        ("mcp",),
+        ("approvals", "run", "--once", "--no-propose"),
+        ("connector", "status"),
+        ("unit", "worker"),
+    ],
+)
+def test_process_control_commands_reject_outer_account_selectors(tmp_path, selector, command):
+    result = pm(tmp_path, *selector, *command, stdin="")
+    assert result.returncode == 2, (result.stdout, result.stderr)
+    assert "--workspace/--state" in result.stderr
+    assert result.stdout == ""
+    assert not (tmp_path / "pm-home" / "chatgpt").exists()
+
+
 def pm(tmp_path, *args, stdin=None, extra_env=None, timeout=20):
     env = {
         **os.environ,

@@ -14,7 +14,7 @@ path to execution. Any ambiguity (an interrupted wait, an unrecognized reply, a 
 post or after dispatch) becomes a durable ``asked_post_uncertain`` / ``uncertain`` receipt and is
 NEVER retried, re-asked or re-sent; reconciliation only READS Guardian's status. Approval
 authorizes exactly the bound account/chat/turn/action: a changed turn, running or blocked chat,
-stale or missing evidence, unknown model/effort or an expired window invalidates the request
+stale or missing evidence, or an expired window invalidates the request
 instead of executing it.
 """
 

@@ -59,6 +59,12 @@ inspect status before retrying. pm neither reads nor prints authentication token
 
 ## Permanent recovery service
 
+The control-plane commands `api`, `mcp`, `approvals`, `connector` and `unit` reject
+the outer `pm chatgpt --workspace` and `--state` flags, including an explicit
+`--workspace home`. They return exit 2 before reading or writing control-plane
+state. Select an account with the typed API or MCP `workspace` parameter where
+the method accepts it; those commands never silently ignore an outer selector.
+
 Use `pm chatgpt --workspace glide.vc service` (or `service status`) to observe the
 installed systemd **user** service. This defaults to read-only status. Workspace
 `glide.vc` maps only to `chatgpt-guardian-glide.service`; `home` (the default) maps
